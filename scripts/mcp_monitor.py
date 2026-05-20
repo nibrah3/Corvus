@@ -7,14 +7,14 @@ from __future__ import annotations
 import json, os, sys, requests
 
 RESTART_GUIDE = {
-    "humanizer": "Restart: open a terminal in E:\\cb-core and run:  python -m humanizer_mcp.server",
-    "capture":   "Restart: open a terminal in E:\\cb-core and run:  python -m capture_mcp.server",
-    "uia":       "Restart: open a terminal in E:\\cb-core and run:  python -m uia_mcp.server",
-    "browser":   "Restart: open a terminal in E:\\cb-core and run:  python -m browser_mcp.server",
-    "gemini":    "Restart: open a terminal in E:\\cb-core and run:  python -m gemini_mcp.server",
-    "telegram":  "Restart: open a terminal in E:\\cb-core and run:  python -m telegram_mcp.server",
-    "answer":    "Restart: open a terminal in E:\\cb-core and run:  python -m answer_mcp.server",
-    "sqlite":    "Restart: open a terminal in E:\\cb-core and run:  python -m mcp_server_sqlite --db-path E:/cb-core/careerbridge.db",
+    "humanizer": "Restart: open a terminal in D:\\cb-core and run:  python -m humanizer_mcp.server",
+    "capture":   "Restart: open a terminal in D:\\cb-core and run:  python -m capture_mcp.server",
+    "uia":       "Restart: open a terminal in D:\\cb-core and run:  python -m uia_mcp.server",
+    "browser":   "Restart: open a terminal in D:\\cb-core and run:  python -m browser_mcp.server",
+    "gemini":    "Restart: open a terminal in D:\\cb-core and run:  python -m gemini_mcp.server",
+    "telegram":  "Restart: open a terminal in D:\\cb-core and run:  python -m telegram_mcp.server",
+    "answer":    "Restart: open a terminal in D:\\cb-core and run:  python -m answer_mcp.server",
+    "sqlite":    "Restart: open a terminal in D:\\cb-core and run:  python -m mcp_server_sqlite --db-path D:/cb-core/careerbridge.db",
     "memory":    "Restart: open a terminal and run:  node C:\\Users\\Mike\\AppData\\Roaming\\npm\\node_modules\\@modelcontextprotocol\\server-memory\\dist\\index.js",
 }
 

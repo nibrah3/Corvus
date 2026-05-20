@@ -9,7 +9,7 @@
 # Only register: CareerBridge-Agent and CareerBridgeIXBrowser (done separately).
 
 $taskName   = "CareerBridge-Agent"
-$scriptPath = "E:\cb-core\scripts\start_agent.ps1"
+$scriptPath = "D:\cb-core\scripts\start_agent.ps1"
 $pwsh       = "powershell.exe"
 
 # Remove old version if it exists

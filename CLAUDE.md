@@ -88,7 +88,7 @@ When done recording, press F11 again to restore normal view before continuing.
 - **Answer quality** → Write answers directly as Claude (Sonnet) in persona voice. Do NOT call `mcp__answer__humanize_prose` for generation — only for post-processing if needed.
 
 ### Persona system
-Personas live in `E:\cb-core\profiles\{profile_id}.json`:
+Personas live in `D:\cb-core\profiles\{profile_id}.json`:
 ```json
 {
   "profile_id": "...",
@@ -130,10 +130,10 @@ Key tables: `tasks`, `incoming` (legacy, no longer actively used). Query with `m
 
 ```powershell
 # Start all MCP servers (skips if already running)
-powershell -File E:\cb-core\scripts\start_mcps.ps1
+powershell -File D:\cb-core\scripts\start_mcps.ps1
 
 # Start the agent loop with Remote Control
-powershell -File E:\cb-core\scripts\start_agent.ps1
+powershell -File D:\cb-core\scripts\start_agent.ps1
 ```
 
 To verify MCPs are live:

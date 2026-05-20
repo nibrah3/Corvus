@@ -69,6 +69,17 @@ All Bash and MCP tools are pre-approved in `~/.claude/settings.json`. No approva
 5. **Edit** → user copies the code block, pastes their modified version directly into the chat message. Read their message and type that version verbatim.
 6. **Regenerate** → write a new draft, loop back to step 1.
 
+### Video fullscreen rule
+
+Before starting any Gemini video recording or analysing any video content on screen:
+1. `mcp__humanizer__humanized_hotkey(keys=["f11"])` — toggle fullscreen.
+2. `mcp__browser__wait_for_load()` — wait for the transition to settle.
+3. `mcp__capture__screenshot()` — confirm fullscreen before proceeding.
+4. If fullscreen did not apply (e.g. embedded player), find and click the fullscreen button via `mcp__uia__find_elements` or `mcp__humanizer__humanized_click` on the player's fullscreen icon.
+5. Only then call `mcp__gemini__start_recording()`.
+
+When done recording, press F11 again to restore normal view before continuing.
+
 ### Tool routing
 - **Screen analysis** → `mcp__capture__screenshot` → `mcp__gemini__analyse_image`
 - **Element finding** → `mcp__uia__find_elements`

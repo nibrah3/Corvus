@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.db
+memory_store.json
+logs/
+capture_mcp/samples/
+capture_mcp/page_test/
+humanizer_mcp/test_*.png
+humanizer_mcp/t2_*.png
+humanizer_mcp/smoke_test.cpython*
+*.log
+.env

@@ -21,11 +21,20 @@ def _get_cam():
         _cam = dxcam.create(output_color="BGR")
     return _cam
 
+def _screen_size() -> tuple[int, int]:
+    import ctypes
+    user32 = ctypes.windll.user32
+    user32.SetProcessDPIAware()
+    return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+
 def capture(x: int = 0, y: int = 0, w: int | None = None, h: int | None = None) -> bytes:
     """Return PNG bytes. DXcam returns numpy BGR array."""
     cam = _get_cam()
+    sw, sh = _screen_size()
     if w and h:
-        region = (x, y, x + w, y + h)
+        x2 = min(x + w, sw)
+        y2 = min(y + h, sh)
+        region = (max(x, 0), max(y, 0), x2, y2)
         frame = cam.grab(region=region)
     else:
         frame = cam.grab()
@@ -34,7 +43,8 @@ def capture(x: int = 0, y: int = 0, w: int | None = None, h: int | None = None) 
         # DXcam returns None if frame unchanged since last grab — retry once
         import time
         time.sleep(0.02)
-        frame = cam.grab(region=(x, y, x+w, y+h) if w and h else None)
+        region = (max(x, 0), max(y, 0), min(x+w, sw), min(y+h, sh)) if w and h else None
+        frame = cam.grab(region=region)
     if frame is None:
         raise RuntimeError("dxcam returned None frame")
 

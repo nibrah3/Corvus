@@ -1,5 +1,12 @@
 # register_startup.ps1 — Register CareerBridge agent as a Windows startup task.
 # Run this ONCE as Administrator. After that, the agent starts automatically at boot.
+#
+# NOTE: On the original machine, three stale tasks exist but are harmless (no scripts
+# behind them). Do NOT register these on new machines:
+#   - CareerBridgeTunnel   (retired — ZeroClaw tunnel, no longer used)
+#   - CareerBridgeWorker   (retired — standalone worker, replaced by Claude Code)
+#   - CareerBridgeZeroClaw (retired — ZeroClaw removed from project)
+# Only register: CareerBridge-Agent and CareerBridgeIXBrowser (done separately).
 
 $taskName   = "CareerBridge-Agent"
 $scriptPath = "E:\cb-core\scripts\start_agent.ps1"

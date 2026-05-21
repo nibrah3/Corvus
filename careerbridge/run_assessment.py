@@ -44,7 +44,7 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Load OPENROUTER_API_KEY from the shared runtime .env if not already in env.
-_ENV_FILE = r"E:\careerbridge\runtime\.env"
+_ENV_FILE = r"D:\cb-core\runtime\.env"
 if not os.getenv("OPENROUTER_API_KEY") and os.path.exists(_ENV_FILE):
     with open(_ENV_FILE, encoding="utf-8") as _f:
         for _line in _f:

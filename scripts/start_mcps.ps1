@@ -3,7 +3,7 @@
 # Each server auto-skips if already listening on its port.
 
 $py  = "C:\Python314\python.exe"
-$cb  = "E:\cb-core"
+$cb  = "D:\cb-core"
 
 $servers = @(
     @{ mod = "humanizer_mcp.server"; port = 8701 },

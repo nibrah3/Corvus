@@ -18,7 +18,7 @@ import time
 import pyautogui
 
 # Load OPENROUTER_API_KEY from shared .env if not already set
-_ENV_FILE = r"E:\careerbridge\runtime\.env"
+_ENV_FILE = r"D:\cb-core\runtime\.env"
 if not os.getenv("OPENROUTER_API_KEY") and os.path.exists(_ENV_FILE):
     with open(_ENV_FILE, encoding="utf-8") as _f:
         for _line in _f:
@@ -27,7 +27,7 @@ if not os.getenv("OPENROUTER_API_KEY") and os.path.exists(_ENV_FILE):
                 os.environ["OPENROUTER_API_KEY"] = _line.split("=", 1)[1].strip()
                 break
 
-sys.path.insert(0, r"E:\cb-core")
+sys.path.insert(0, r"D:\cb-core")
 
 from careerbridge.capture import CaptureSession
 from careerbridge.reasoning.gemini_agent import decide

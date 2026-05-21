@@ -12,7 +12,7 @@ import threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from _minmcp import MinMCP
 
-STORE_PATH = os.environ.get("CB_MEMORY_PATH", r"E:\cb-core\memory_store.json")
+STORE_PATH = os.environ.get("CB_MEMORY_PATH", r"D:\cb-core\memory_store.json")
 mcp = MinMCP("memory")
 
 _lock = threading.Lock()

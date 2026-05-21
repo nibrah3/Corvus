@@ -109,7 +109,7 @@ def humanized_scroll(
         x: Screen x coordinate to position cursor before scrolling.
         y: Screen y coordinate.
         direction: "up" or "down".
-        notches: Total scroll notches (UFO wheel_dist magnitude).
+        notches: Total scroll notches.
         profile_seed: Integer seed for reproducible per-session timing.
     """
     profile, rng = _get_session(profile_seed)

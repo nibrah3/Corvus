@@ -58,7 +58,7 @@ def scroll(
       - Natural acceleration: faster bursts in the middle of a long scroll
 
     direction: "up" or "down"
-    notches:   total scroll notches to send (UFO wheel_dist magnitude)
+    notches:   total scroll notches to send
     """
     if profile is None:
         profile = BehaviorProfile.default()

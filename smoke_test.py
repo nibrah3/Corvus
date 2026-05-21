@@ -9,7 +9,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 # suppress noisy import warnings
 import warnings
 warnings.filterwarnings("ignore")
-os.environ.setdefault("PYTHONPATH", r"E:\cb-core")
+os.environ.setdefault("PYTHONPATH", r"D:\cb-core")
 
 SEP = "-" * 60
 OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")

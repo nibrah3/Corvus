@@ -95,7 +95,7 @@ MCP server on port 8710. Extension POSTs snapshots to port 8711 (internal receiv
 If `get_page_context` returns an error, the extension is not active on the current tab — fall back to screenshot pipeline.
 
 ### Persona system
-Personas live in `E:\cb-core\profiles\{profile_id}.json`:
+Personas live in `D:\cb-core\profiles\{profile_id}.json`:
 ```json
 {
   "profile_id": "...",
@@ -148,10 +148,10 @@ Key tables: `tasks`, `incoming` (legacy, no longer actively used). Query with `m
 
 ```powershell
 # Start all MCP servers (skips if already running)
-powershell -File E:\cb-core\scripts\start_mcps.ps1
+powershell -File D:\cb-core\scripts\start_mcps.ps1
 
 # Start the agent loop with Remote Control
-powershell -File E:\cb-core\scripts\start_agent.ps1
+powershell -File D:\cb-core\scripts\start_agent.ps1
 ```
 
 To verify MCPs are live:

@@ -10,7 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from _minmcp import MinMCP
 
-DB_PATH = os.environ.get("CB_DB_PATH", r"E:\cb-core\careerbridge.db")
+DB_PATH = os.environ.get("CB_DB_PATH", r"D:\cb-core\careerbridge.db")
 mcp = MinMCP("sqlite")
 
 

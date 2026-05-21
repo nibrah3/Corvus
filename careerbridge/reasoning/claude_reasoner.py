@@ -21,7 +21,7 @@ from ..errors import ErrorCode, LLMError
 from ..schema import Action, Profile, UIState
 from ..types import ActionType, ConfidenceBand, ElementType, confidence_band
 
-_MODEL      = "anthropic/claude-haiku-4.5"
+_MODEL      = "anthropic/claude-sonnet-4-6"
 _BASE_URL   = "https://openrouter.ai/api/v1"
 _MAX_TOKENS = 1024
 

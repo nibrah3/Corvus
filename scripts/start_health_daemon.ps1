@@ -5,6 +5,6 @@ $env:TELEGRAM_BOT_TOKEN    = [System.Environment]::GetEnvironmentVariable("TELEG
 $env:TELEGRAM_ADMIN_CHAT_ID = [System.Environment]::GetEnvironmentVariable("TELEGRAM_ADMIN_CHAT_ID", "User")
 
 $py     = "C:\Python314\python.exe"
-$script = "E:\cb-core\scripts\health_daemon.py"
+$script = "$PSScriptRoot\health_daemon.py"
 
 & $py $script

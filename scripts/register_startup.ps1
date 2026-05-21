@@ -48,7 +48,7 @@ Write-Host "Task '$taskName' registered."
 # ── Health daemon ─────────────────────────────────────────────────────────────
 
 $daemonName    = "CareerBridge-Health"
-$daemonWrapper = "E:\cb-core\scripts\start_health_daemon.ps1"
+$daemonWrapper = "$PSScriptRoot\start_health_daemon.ps1"
 $pwshExe       = "powershell.exe"
 
 Unregister-ScheduledTask -TaskName $daemonName -Confirm:$false -ErrorAction SilentlyContinue
@@ -56,7 +56,7 @@ Unregister-ScheduledTask -TaskName $daemonName -Confirm:$false -ErrorAction Sile
 $daemonAction = New-ScheduledTaskAction `
     -Execute $pwshExe `
     -Argument "-NonInteractive -WindowStyle Hidden -File `"$daemonWrapper`"" `
-    -WorkingDirectory "E:\cb-core"
+    -WorkingDirectory (Split-Path $PSScriptRoot -Parent)
 
 $daemonSettings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit (New-TimeSpan -Hours 0) `

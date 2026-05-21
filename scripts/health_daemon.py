@@ -25,8 +25,8 @@ from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-CB_DIR  = Path("E:/cb-core")
-PYTHON  = Path("C:/Python314/python.exe")
+CB_DIR  = Path(os.environ.get("CB_DIR", Path(__file__).resolve().parent.parent))
+PYTHON  = Path(os.environ.get("CB_PYTHON", "C:/Python314/python.exe"))
 LOG     = CB_DIR / "logs" / "health.log"
 DB      = CB_DIR / "careerbridge.db"
 

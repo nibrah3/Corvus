@@ -287,20 +287,25 @@ class CDPExecutor:
     # ── Scroll ────────────────────────────────────────────────────────────────
 
     def scroll(self, direction: str = "down", clicks: int = 3) -> None:
-        """Dispatch mouse-wheel events at the page centre."""
-        result = self.eval_js(
-            "({x: window.innerWidth/2, y: window.innerHeight/2})"
-        )
-        x = result.get("x", 683)
-        y = result.get("y", 384)
-        delta = -clicks * 120 if direction == "down" else clicks * 120
+        """Scroll the page using window.scrollBy (works on all page types)."""
+        delta = clicks * 300 if direction == "down" else -clicks * 300
         for _ in range(abs(clicks)):
-            self._send("Input.dispatchMouseEvent", {
-                "type": "mouseWheel",
-                "x": x, "y": y,
-                "deltaX": 0, "deltaY": -120 if direction == "down" else 120,
-            })
+            self.eval_js(f"window.scrollBy(0, {delta // abs(clicks)})")
             time.sleep(random.gauss(0.12, 0.03))
+
+    def navigate(self, url: str, timeout: float = 10.0) -> None:
+        """Navigate to a URL and wait for the page to finish loading."""
+        self._send("Page.enable")
+        nav = self._send("Page.navigate", {"url": url})
+        frame_id = nav.get("frameId")
+        deadline = time.time() + timeout
+        # Poll until the URL changes or timeout
+        while time.time() < deadline:
+            current = self.eval_js("location.href") or ""
+            if url in current or current != "about:blank":
+                time.sleep(0.5)
+                break
+            time.sleep(0.2)
 
     # ── JS evaluation ─────────────────────────────────────────────────────────
 

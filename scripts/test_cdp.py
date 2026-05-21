@@ -130,15 +130,14 @@ def test_click_selector(ex: CDPExecutor):
     print("TEST 8 — Click by CSS Selector")
     print("  (navigating to a known test page with radio buttons)")
     try:
-        # Use a local data URI with a radio button — no external dependency
         html = (
             "data:text/html,<html><body>"
             "<input type='radio' name='q' value='yes' id='r1'> Yes"
             "<input type='radio' name='q' value='no'  id='r2'> No"
             "</body></html>"
         )
-        ex.eval_js(f"window.location.href = '{html}'")
-        time.sleep(1.0)
+        ex.navigate(html)
+        time.sleep(0.5)
         ex.click_selector("#r1")
         checked = ex.eval_js("document.getElementById('r1').checked")
         if checked:
@@ -172,8 +171,8 @@ def test_type_text(ex: CDPExecutor):
             "<input type='text' id='t1'>"
             "</body></html>"
         )
-        ex.eval_js(f"window.location.href = '{html}'")
-        time.sleep(1.0)
+        ex.navigate(html)
+        time.sleep(0.5)
         ex.click_selector("#t1")
         ex.type_text("hello cdp")
         val = ex.eval_js("document.getElementById('t1').value")

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import random
 import time
 from typing import Callable, Optional
 
@@ -228,7 +229,10 @@ class AssessmentOrchestrator:
                 pass
 
             last_frame = frame
-            time.sleep(self._poll_interval_s)
+            # Gaussian jitter: prevents perfectly rhythmic polling patterns
+            # that anti-bot systems flag as automation signatures.
+            jitter = random.gauss(0, self._poll_interval_s * 0.2)
+            time.sleep(max(0.05, self._poll_interval_s + jitter))
 
         self.fsm.to_error("WAIT_UI timeout: UI did not settle")
         return last_frame

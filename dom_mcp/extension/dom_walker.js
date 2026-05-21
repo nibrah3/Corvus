@@ -167,6 +167,111 @@
     };
   }
 
-  global.cbWalker = { extract: extract };
+  // ── Interactive elements with full ARIA + bounding rect ──────────────────────
+  // Richer than extract() — used by CDP executor to get click coordinates
+  // and by the LLM to understand interactive state without a screenshot.
+
+  function extractInteractives() {
+    var results = [];
+    var seen = new Set();
+    var idx = 0;
+
+    function nodeId(el) {
+      if (!el.__cbId) el.__cbId = 'cb-' + (++idx);
+      return el.__cbId;
+    }
+
+    function rect(el) {
+      var r = el.getBoundingClientRect();
+      return { x: Math.round(r.left), y: Math.round(r.top),
+               w: Math.round(r.width), h: Math.round(r.height),
+               cx: Math.round(r.left + r.width / 2),
+               cy: Math.round(r.top + r.height / 2) };
+    }
+
+    function ariaState(el) {
+      var s = {};
+      var attrs = ['checked','selected','disabled','expanded',
+                   'required','pressed','invalid','readonly',
+                   'multiselectable','haspopup'];
+      attrs.forEach(function(a) {
+        var v = el.getAttribute('aria-' + a);
+        if (v !== null) s[a] = v === 'true' ? true : v === 'false' ? false : v;
+      });
+      // native checked/disabled/required
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        s.checked  = el.checked;
+        s.disabled = el.disabled;
+        s.required = el.required;
+      }
+      if (el.tagName === 'SELECT') {
+        s.disabled = el.disabled;
+        s.required = el.required;
+      }
+      return s;
+    }
+
+    function role(el) {
+      return el.getAttribute('role') ||
+             { INPUT: el.type || 'input', SELECT: 'listbox',
+               TEXTAREA: 'textbox', BUTTON: 'button',
+               A: 'link' }[el.tagName] || el.tagName.toLowerCase();
+    }
+
+    var selectors = [
+      'input:not([type="hidden"])',
+      'select',
+      'textarea',
+      'button',
+      '[role="button"]',
+      '[role="radio"]',
+      '[role="checkbox"]',
+      '[role="option"]',
+      '[role="tab"]',
+      '[role="menuitem"]',
+      '[role="switch"]',
+      '[role="combobox"]',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',');
+
+    queryDeep(selectors).forEach(function(el) {
+      if (!isVisible(el)) return;
+      var id = nodeId(el);
+      if (seen.has(id)) return;
+      seen.add(id);
+
+      var r = rect(el);
+      if (r.w === 0 && r.h === 0) return;  // off-screen / display:none
+
+      var entry = {
+        id:          id,
+        role:        role(el),
+        tag:         el.tagName.toLowerCase(),
+        type:        el.type || null,
+        name:        getLabel(el),
+        value:       el.value !== undefined ? el.value : null,
+        text:        (el.textContent || '').trim().slice(0, 300),
+        placeholder: el.placeholder || null,
+        state:       ariaState(el),
+        rect:        r,
+        selector:    el.id ? '#' + CSS.escape(el.id)
+                           : (el.name ? el.tagName.toLowerCase() + '[name="' + el.name + '"]' : null),
+        testId:      el.getAttribute('data-testid') || el.getAttribute('data-cy') ||
+                     el.getAttribute('data-test') || null,
+      };
+
+      if (el.tagName === 'SELECT') {
+        entry.options = Array.from(el.options).map(function(o) {
+          return { value: o.value, text: o.text.trim(), selected: o.selected };
+        });
+      }
+
+      results.push(entry);
+    });
+
+    return results;
+  }
+
+  global.cbWalker = { extract: extract, extractInteractives: extractInteractives };
 
 }(window));

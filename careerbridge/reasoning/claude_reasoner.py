@@ -25,6 +25,19 @@ _MODEL      = "anthropic/claude-sonnet-4-6"
 _BASE_URL   = "https://openrouter.ai/api/v1"
 _MAX_TOKENS = 1024
 
+# System prompt is static across all calls — mark it for prompt caching.
+# OpenRouter passes cache_control through to Anthropic; cached tokens cost
+# ~10% of full price after the first call, cutting per-question LLM cost ~60%.
+_SYSTEM_PROMPT = (
+    "You are completing a personality or skills assessment on behalf of a candidate. "
+    "Select the answer option that best matches the personality profile for each question. "
+    "Return ONLY a valid JSON array of action objects. "
+    "Each object must have exactly two keys: "
+    "'element_id' (the string id of the element to click) and "
+    "'action_type' (always the string 'click'). "
+    "One action per question. No explanation, no markdown, no code fences."
+)
+
 
 def _client() -> OpenAI:
     key = os.getenv("OPENROUTER_API_KEY", "")
@@ -62,15 +75,6 @@ def build_prompt(ui_state: UIState, profile: Profile) -> str:
         })
 
     payload = {
-        "task": (
-            "You are completing a personality or skills assessment on behalf of a candidate. "
-            "Select the answer option that best matches the personality profile for each question. "
-            "Return ONLY a valid JSON array of action objects. "
-            "Each object must have exactly two keys: "
-            "'element_id' (the string id of the element to click) and "
-            "'action_type' (always the string 'click'). "
-            "One action per question. No explanation, no markdown, no code fences."
-        ),
         "personality": {
             "openness":                 profile.big_five.openness,
             "conscientiousness":        profile.big_five.conscientiousness,
@@ -189,7 +193,19 @@ def claude_reasoner(ui_state: UIState, profile: Profile) -> list[Action]:
         resp = _client().chat.completions.create(
             model=_MODEL,
             max_tokens=_MAX_TOKENS,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": _SYSTEM_PROMPT,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                },
+                {"role": "user", "content": prompt},
+            ],
         )
     except LLMError:
         raise

@@ -3,7 +3,7 @@
 # Each server auto-skips if already listening on its port.
 
 $py  = "C:\Python314\python.exe"
-$cb  = "D:\cb-core"
+$cb  = Split-Path $PSScriptRoot -Parent
 
 $servers = @(
     @{ mod = "humanizer_mcp.server"; port = 8701 },
@@ -15,7 +15,8 @@ $servers = @(
     @{ mod = "answer_mcp.server";    port = 8707 },
     @{ mod = "sqlite_mcp.server";    port = 8708 },
     @{ mod = "memory_mcp.server";    port = 8709 },
-    @{ mod = "dom_mcp.server";       port = 8710 }
+    @{ mod = "dom_mcp.server";       port = 8710 },
+    @{ mod = "cdp_mcp.server";       port = 8712 }
 )
 
 foreach ($s in $servers) {

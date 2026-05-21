@@ -5,7 +5,7 @@
 $ErrorActionPreference = "Stop"
 $cb  = "D:\cb-core"
 $vps = "root@77.42.91.185"
-$port = 7070
+$port = 7071
 $keyPath = "$env:USERPROFILE\.ssh\cb_remote_agent"
 
 # ── 1. Git pull ───────────────────────────────────────────────────────────────

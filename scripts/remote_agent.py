@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 AUTH_TOKEN = "cb-remote-2026-xk9"
 CB_DIR     = r"D:\cb-core"
 PYTHON     = r"C:\Python314\python.exe"
-PORT       = 7070
+PORT       = 7071
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -21,7 +21,7 @@ import subprocess
 import sys
 
 VPS        = "root@77.42.91.185"
-PORT       = 7070
+PORT       = 7071
 AUTH_TOKEN = "cb-remote-2026-xk9"
 
 

@@ -1,0 +1,16 @@
+[Unit]
+Description=CareerBridge VPS MCP Servers
+After=network.target
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+WorkingDirectory=/opt/corvus/mcp_servers
+EnvironmentFile=/opt/corvus/.env
+ExecStart=/bin/bash /opt/corvus/mcp_servers/start_mcps.sh
+ExecStop=/bin/bash -c "pkill -f 'python3 -m postgres_mcp' || true; pkill -f 'python3 -m crawlee_mcp' || true; pkill -f 'python3 -m telegram_mcp' || true"
+
+[Install]
+WantedBy=multi-user.target

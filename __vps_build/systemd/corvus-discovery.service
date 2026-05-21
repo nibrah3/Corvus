@@ -1,0 +1,18 @@
+[Unit]
+Description=CareerBridge Discovery Cycle (one-shot)
+After=corvus-mcps.service
+Requires=corvus-mcps.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/corvus
+EnvironmentFile=/opt/corvus/.env
+ExecStart=/usr/local/bin/claude --print "Run one discovery cycle: call crawlee_mcp.trigger_scrape for sources reddit, hackernews, wellfound, ycombinator. For each result call crawlee_mcp.scrape_url to get description. Score each job 0-1 against all profiles in postgres_mcp. Call postgres_mcp.upsert_job for any job scoring 0.6+. Push new job summaries to Redis corvus:pending_approvals via: redis-cli -p 6379 RPUSH corvus:pending_approvals '<json>'. Log cycle stats via postgres_mcp.log_event. Send one-line Telegram summary via telegram_mcp.notify." --dangerously-skip-permissions
+TimeoutStartSec=1800
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=corvus-discovery
+
+[Install]
+WantedBy=multi-user.target

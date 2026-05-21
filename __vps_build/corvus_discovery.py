@@ -98,9 +98,9 @@ REDDIT_SOURCES = [
 # Add slug to include; function handles 404/empty gracefully
 GREENHOUSE_BOARDS = [
     "prolific",      # 128 AI Trainer roles — confirmed Track A
-    "scaleai",       # ~9 annotation roles
     "remotasks",     # AI Training for Igbo Writers, Video Description etc.
-    "toloka",        # freelance technical roles (filtered by keywords)
+    # scaleai removed — board only has professional engineering roles (Track B)
+    # toloka removed — 0 Track A matches after keyword tightening
 ]
 
 # Keywords that mark a job as Track A (case-insensitive, any match → include)

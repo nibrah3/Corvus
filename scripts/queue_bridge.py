@@ -25,6 +25,8 @@ from pathlib import Path
 
 CB_DIR  = Path(__file__).resolve().parent.parent
 PYTHON  = os.environ.get("CB_PYTHON", "C:/Python314/python.exe")
+LAUNCH_BROWSER = str(CB_DIR / "careerbridge" / "launch_browser.py")
+BROWSER_SETUP  = str(CB_DIR / "careerbridge" / "browser_setup.py")
 RUN_ASSESSMENT = str(CB_DIR / "careerbridge" / "run_assessment.py")
 
 REDIS_HOST     = "127.0.0.1"
@@ -203,8 +205,37 @@ def dispatch_job(job_payload: dict) -> dict:
         "window_title": "IXBrowser",
     }
 
-    print(f"  [dispatch] profile={profile_dict['name']!r} url={url[:80]}")
+    # IXBrowser profile name matches postgres profile_id by convention
+    ix_profile = profile_id or profile_dict["profile_id"]
+    print(f"  [dispatch] profile={profile_dict['name']!r} ix_profile={ix_profile!r} url={url[:80]}")
 
+    # Step 1: ensure IXBrowser is running
+    try:
+        r = subprocess.run([PYTHON, LAUNCH_BROWSER, "--wait", "20"],
+                           capture_output=True, text=True, timeout=30, cwd=str(CB_DIR))
+        launch_result = json.loads(r.stdout.strip()) if r.stdout.strip() else {}
+        if "error" in launch_result:
+            return {"ok": False, "result": f"IXBrowser launch failed: {launch_result['error']}"}
+        print(f"  [ixbrowser] {launch_result.get('status', 'unknown')}")
+    except Exception as e:
+        return {"ok": False, "result": f"IXBrowser launch error: {e}"}
+
+    # Step 2: open the candidate's IXBrowser profile and navigate to the job URL
+    try:
+        r = subprocess.run(
+            [PYTHON, BROWSER_SETUP, "--profile", ix_profile, "--url", url, "--wait", "25"],
+            capture_output=True, text=True, timeout=60, cwd=str(CB_DIR)
+        )
+        setup_result = json.loads(r.stdout.strip()) if r.stdout.strip() else {}
+        if "error" in setup_result:
+            return {"ok": False, "result": f"Browser setup failed: {setup_result['error']}"}
+        window_title = setup_result.get("window_title", "IXBrowser")
+        print(f"  [browser] ready — window: {window_title!r}")
+        payload["window_title"] = window_title
+    except Exception as e:
+        return {"ok": False, "result": f"Browser setup error: {e}"}
+
+    # Step 3: run the assessment FSM against the open browser window
     try:
         proc = subprocess.run(
             [PYTHON, RUN_ASSESSMENT],
@@ -280,7 +311,7 @@ def process_queue(once: bool = False):
                 "result": result_str[:1000],
             }))
 
-            print(f"[{job_id}] postgres → {status}")
+            print(f"[{job_id}] postgres status: {status}")
 
         elif once:
             print("Queue empty — exiting (--once mode).")

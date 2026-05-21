@@ -169,6 +169,16 @@ def redis_rpush(key: str, value: str) -> None:
 
 # ── Serper (Google search) ─────────────────────────────────────────────────────
 
+_SERPER_NOISE_DOMAINS = {
+    "youtube.com", "facebook.com", "instagram.com", "twitter.com", "x.com",
+    "wikipedia.org", "reddit.com/r/wiki", "amazon.com", "tiktok.com",
+    "pinterest.com", "glassdoor.com/blog", "quora.com",
+}
+
+def _is_noise_url(url: str) -> bool:
+    return any(d in url for d in _SERPER_NOISE_DOMAINS)
+
+
 def serper_search(query: str, num: int = 10) -> list[dict]:
     if not SERPER_KEY:
         return []
@@ -181,7 +191,7 @@ def serper_search(query: str, num: int = 10) -> list[dict]:
     results = []
     for item in resp.get("organic", []):
         url = item.get("link", "")
-        if not url:
+        if not url or _is_noise_url(url):
             continue
         results.append({
             "title": item.get("title", ""),

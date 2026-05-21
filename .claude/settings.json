@@ -10,6 +10,17 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__humanizer__.*|mcp__uia__.*|mcp__capture__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Python314\\python.exe E:\\cb-core\\hooks\\require_approval.py"
+          }
+        ]
+      }
     ]
   }
 }

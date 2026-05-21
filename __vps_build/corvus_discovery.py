@@ -457,6 +457,11 @@ def run_discovery():
             total_skipped += 1
             continue
 
+        # Only push to Redis if this is a genuinely new URL — prevents unbounded queue growth
+        if not upsert.get("is_new", True):
+            total_skipped += 1
+            continue
+
         redis_rpush(REDIS_KEY, json.dumps({
             "job_id": job_id,
             "url": job["url"],

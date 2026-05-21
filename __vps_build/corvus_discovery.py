@@ -94,6 +94,29 @@ REDDIT_SOURCES = [
     ("reddit", "beermoney AI annotator task evaluator"),
 ]
 
+# Greenhouse ATS board slugs for known Track A companies
+# Add slug to include; function handles 404/empty gracefully
+GREENHOUSE_BOARDS = [
+    "prolific",      # 128 AI Trainer roles — confirmed Track A
+    "scaleai",       # ~9 annotation roles
+    "remotasks",     # AI Training for Igbo Writers, Video Description etc.
+    "toloka",        # freelance technical roles (filtered by keywords)
+]
+
+# Keywords that mark a job as Track A (case-insensitive, any match → include)
+# Deliberately narrow: "freelance"/"gig" are too broad and match professional roles
+TRACK_A_KEYWORDS = [
+    "ai trainer", "ai training", "data annotation", "data annotator",
+    "data labeling", "data labelling", "content moderator", "content moderation",
+    "rlhf", "ai evaluator", "ai feedback", "ai reviewer",
+    "annotation specialist", "labeling specialist", "labelling specialist",
+    "image annotation", "video annotation", "text annotation",
+    "speech annotation", "audio annotation",
+    "machine learning trainer", "model trainer", "response quality",
+    "human feedback", "search quality", "quality rater",
+    "micro task", "micro-task", "crowdsource", "crowd work",
+]
+
 
 # ── HTTP helpers ───────────────────────────────────────────────────────────────
 
@@ -191,6 +214,16 @@ def _company_from(url: str, title: str) -> str:
         "lever.co": "via Lever",
         "greenhouse.io": "via Greenhouse",
         "ashbyhq.com": "via Ashby",
+        "prolific.greenhouse.io": "Prolific",
+        "appen.greenhouse.io": "Appen",
+        "scaleai.greenhouse.io": "Scale AI",
+        "outlier.greenhouse.io": "Outlier AI",
+        "surgehq.greenhouse.io": "Surge HQ",
+        "sama.greenhouse.io": "Sama",
+        "hive.greenhouse.io": "Hive",
+        "telusinternational.greenhouse.io": "TELUS International",
+        "lionbridge.greenhouse.io": "Lionbridge",
+        "clickworker.greenhouse.io": "Clickworker",
     }
     for domain, name in known.items():
         if domain in url:
@@ -202,6 +235,47 @@ def _company_from(url: str, title: str) -> str:
         return url.split("/")[2].replace("www.", "")
     except Exception:
         return "Unknown"
+
+
+# ── Greenhouse ATS direct API ─────────────────────────────────────────────────
+
+def _is_track_a(text: str) -> bool:
+    low = text.lower()
+    return any(kw in low for kw in TRACK_A_KEYWORDS)
+
+
+def scrape_greenhouse(slug: str) -> list[dict]:
+    """Fetch individual job postings from a Greenhouse ATS board."""
+    url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode())
+    except Exception as e:
+        print(f"  [greenhouse/{slug}] error: {e}", file=sys.stderr)
+        return []
+
+    jobs = data.get("jobs", [])
+    results = []
+    for job in jobs:
+        title = job.get("title", "")
+        dept = " ".join(d.get("name", "") for d in job.get("departments", []))
+        location = " ".join(o.get("name", "") for o in job.get("offices", []))
+        apply_url = job.get("absolute_url", "")
+        content = job.get("content", "")
+
+        combined = f"{title} {dept} {content[:500]}"
+        if not _is_track_a(combined):
+            continue
+
+        results.append({
+            "title": title,
+            "url": apply_url or f"https://boards.greenhouse.io/{slug}",
+            "company": _company_from(f"{slug}.greenhouse.io", title),
+            "description": f"{location} | {content[:600]}".strip(" |"),
+            "source": "greenhouse",
+        })
+    return results
 
 
 # ── Firecrawl page scrape + LLM extraction ────────────────────────────────────
@@ -322,7 +396,22 @@ def run_discovery():
         print(f"    +{added} | {keywords[:50]}")
         time.sleep(0.5)
 
-    # 3. Direct gig-platform page scrapes ──────────────────────────────────────
+    # 3. Greenhouse ATS boards (real individual postings) ──────────────────────
+    print(f"  [Greenhouse] Querying {len(GREENHOUSE_BOARDS)} ATS boards...")
+    for slug in GREENHOUSE_BOARDS:
+        jobs_from_gh = scrape_greenhouse(slug)
+        added = 0
+        for j in jobs_from_gh:
+            if j.get("url") and j["url"] not in seen_urls:
+                seen_urls.add(j["url"])
+                all_jobs.append(j)
+                added += 1
+        print(f"    +{added} Track A | {slug}")
+        time.sleep(0.5)
+    gh_count = sum(1 for j in all_jobs if j.get("source") == "greenhouse")
+    print(f"  [Greenhouse] {gh_count} total Track A individual postings")
+
+    # 4. Direct gig-platform page scrapes ──────────────────────────────────────
     print(f"  [Firecrawl] Scraping {len(TRACK_A_PAGES)} gig platform pages...")
     for page_url in TRACK_A_PAGES:
         jobs_from_page = scrape_page_for_jobs(page_url)
@@ -337,7 +426,7 @@ def run_discovery():
 
     print(f"  Total discovered: {len(all_jobs)}")
 
-    # 4. Upsert ALL jobs — no scoring, no threshold ────────────────────────────
+    # 5. Upsert ALL jobs — no scoring, no threshold ────────────────────────────
     print(f"  Upserting to postgres and pushing to approval queue...")
     total_upserted = 0
     total_skipped  = 0
@@ -370,7 +459,7 @@ def run_discovery():
         total_upserted += 1
         time.sleep(0.1)
 
-    # 5. Log + notify ──────────────────────────────────────────────────────────
+    # 6. Log + notify ──────────────────────────────────────────────────────────
     duration_s = round((datetime.now(timezone.utc) - start_ts).total_seconds(), 1)
     stats = {
         "scraped": len(all_jobs),

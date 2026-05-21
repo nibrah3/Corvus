@@ -73,7 +73,29 @@ Register-ScheduledTask `
     -Description "CareerBridge: health daemon — monitors MCP ports and auto-restarts failed servers"
 
 Write-Host "Task '$daemonName' registered."
+
+# ── VPS Tunnel ────────────────────────────────────────────────────────────────
+
+$tunnelName   = "CareerBridge-Tunnel"
+$tunnelScript = "$PSScriptRoot\vps_tunnel.ps1"
+
+Unregister-ScheduledTask -TaskName $tunnelName -Confirm:$false -ErrorAction SilentlyContinue
+
+$tunnelAction = New-ScheduledTaskAction `
+    -Execute $pwshExe `
+    -Argument "-NonInteractive -WindowStyle Hidden -File `"$tunnelScript`""
+
+Register-ScheduledTask `
+    -TaskName   $tunnelName `
+    -Action     $tunnelAction `
+    -Trigger    $trigger `
+    -Settings   $daemonSettings `
+    -Principal  $principal `
+    -Description "CareerBridge: SSH tunnel to VPS (Redis:6380, Postgres:5433, Crawlee:3101)"
+
+Write-Host "Task '$tunnelName' registered."
 Write-Host ""
-Write-Host "To start both now without rebooting:"
+Write-Host "To start all now without rebooting:"
 Write-Host "  Start-ScheduledTask -TaskName '$taskName'"
 Write-Host "  Start-ScheduledTask -TaskName '$daemonName'"
+Write-Host "  Start-ScheduledTask -TaskName '$tunnelName'"

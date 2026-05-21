@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Python314\\python.exe E:\\cb-core\\hooks\\check_pending_approvals.py"
+          }
+        ]
+      }
+    ]
+  }
+}

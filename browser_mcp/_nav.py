@@ -41,10 +41,10 @@ def _profile() -> tuple[BehaviorProfile, Random]:
 def navigate(url: str, profile: BehaviorProfile | None = None, rng: Random | None = None) -> None:
     """Navigate to URL via Ctrl+L → type → Enter."""
     p, r = profile or BehaviorProfile(), rng or Random()
-    hotkey(["ctrl", "l"], p, r)
+    hotkey("ctrl", "l", profile=p, rng=r)
     time.sleep(0.15)
     # Select-all first to clear any existing address bar content
-    hotkey(["ctrl", "a"], p, r)
+    hotkey("ctrl", "a", profile=p, rng=r)
     time.sleep(0.05)
     type_text(url, p, r)
     time.sleep(0.1)
@@ -54,12 +54,12 @@ def navigate(url: str, profile: BehaviorProfile | None = None, rng: Random | Non
 
 def go_back(profile: BehaviorProfile | None = None, rng: Random | None = None) -> None:
     p, r = profile or BehaviorProfile(), rng or Random()
-    hotkey(["alt", "left"], p, r)
+    hotkey("alt", "left", profile=p, rng=r)
 
 
 def go_forward(profile: BehaviorProfile | None = None, rng: Random | None = None) -> None:
     p, r = profile or BehaviorProfile(), rng or Random()
-    hotkey(["alt", "right"], p, r)
+    hotkey("alt", "right", profile=p, rng=r)
 
 
 def reload(profile: BehaviorProfile | None = None, rng: Random | None = None) -> None:
@@ -69,13 +69,13 @@ def reload(profile: BehaviorProfile | None = None, rng: Random | None = None) ->
 
 def new_tab(profile: BehaviorProfile | None = None, rng: Random | None = None) -> None:
     p, r = profile or BehaviorProfile(), rng or Random()
-    hotkey(["ctrl", "t"], p, r)
+    hotkey("ctrl", "t", profile=p, rng=r)
     time.sleep(0.3)
 
 
 def close_tab(profile: BehaviorProfile | None = None, rng: Random | None = None) -> None:
     p, r = profile or BehaviorProfile(), rng or Random()
-    hotkey(["ctrl", "w"], p, r)
+    hotkey("ctrl", "w", profile=p, rng=r)
     time.sleep(0.2)
 
 
@@ -83,7 +83,7 @@ def switch_tab(n: int, profile: BehaviorProfile | None = None, rng: Random | Non
     """Switch to tab n (1-based). n=9 goes to last tab. Clamps to 1-9."""
     p, r = profile or BehaviorProfile(), rng or Random()
     n = max(1, min(9, n))
-    hotkey(["ctrl", str(n)], p, r)
+    hotkey("ctrl", str(n), profile=p, rng=r)
     time.sleep(0.15)
 
 
@@ -96,9 +96,9 @@ def focus_page(profile: BehaviorProfile | None = None, rng: Random | None = None
 
 def scroll_top(profile: BehaviorProfile | None = None, rng: Random | None = None) -> None:
     p, r = profile or BehaviorProfile(), rng or Random()
-    hotkey(["ctrl", "home"], p, r)
+    hotkey("ctrl", "home", profile=p, rng=r)
 
 
 def scroll_bottom(profile: BehaviorProfile | None = None, rng: Random | None = None) -> None:
     p, r = profile or BehaviorProfile(), rng or Random()
-    hotkey(["ctrl", "end"], p, r)
+    hotkey("ctrl", "end", profile=p, rng=r)

@@ -87,7 +87,11 @@ class MinMCP:
 
             sig = inspect.signature(f)
             try:
-                hints = {k: v for k, v in f.__annotations__.items() if k != "return"}
+                # get_type_hints() resolves PEP-563 stringified annotations
+                # (from __future__ import annotations) back to real type objects.
+                # f.__annotations__ would return bare strings like 'int', not int.
+                import typing as _typing
+                hints = {k: v for k, v in _typing.get_type_hints(f).items() if k != "return"}
             except Exception:
                 hints = {}
 
@@ -171,7 +175,23 @@ class MinMCP:
                     "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
                 }
             try:
-                result = tool["fn"](**arguments)
+                # Coerce argument types to match declared schema (Claude may pass
+                # numeric args as JSON strings; arithmetic will fail without coercion).
+                schema_props = tool["inputSchema"].get("properties", {})
+                coerced: dict = {}
+                for k, v in arguments.items():
+                    tp = schema_props.get(k, {}).get("type")
+                    try:
+                        if tp == "integer" and not isinstance(v, int):
+                            v = int(v)
+                        elif tp == "number" and not isinstance(v, float):
+                            v = float(v)
+                        elif tp == "boolean" and not isinstance(v, bool):
+                            v = str(v).lower() not in ("false", "0", "")
+                    except (ValueError, TypeError):
+                        pass
+                    coerced[k] = v
+                result = tool["fn"](**coerced)
                 content = _to_content(result)
                 return {
                     "jsonrpc": "2.0", "id": req_id,

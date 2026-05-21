@@ -81,11 +81,18 @@ Before starting any Gemini video recording or analysing any video content on scr
 When done recording, press F11 again to restore normal view before continuing.
 
 ### Tool routing
-- **Screen analysis** → `mcp__capture__screenshot` → `mcp__gemini__analyse_image`
+- **Page context (preferred)** → `mcp__dom__get_page_context` or `mcp__dom__get_form_elements` — use first on every assessment page. Requires CB DOM Relay extension active in Chrome.
+- **After Next/Submit** → `mcp__dom__wait_for_update` — waits for new question to load.
+- **Screen analysis (fallback)** → `mcp__capture__screenshot` → `mcp__gemini__analyse_image` — use when DOM relay has no data or page uses canvas/iframe.
 - **Element finding** → `mcp__uia__find_elements`
 - **Clicking/typing** → `mcp__humanizer__humanized_click` / `mcp__humanizer__humanized_type`
 - **Navigation** → `mcp__browser__navigate`, `mcp__browser__wait_for_load`
 - **Answer quality** → Write answers directly as Claude (Sonnet) in persona voice. Do NOT call `mcp__answer__humanize_prose` for generation — only for post-processing if needed.
+
+### DOM relay extension
+Extension lives at `E:\cb-core\dom_mcp\extension\`. Load in Chrome via chrome://extensions → Developer mode → Load unpacked.
+MCP server on port 8710. Extension POSTs snapshots to port 8711 (internal receiver, not exposed to Claude directly).
+If `get_page_context` returns an error, the extension is not active on the current tab — fall back to screenshot pipeline.
 
 ### Persona system
 Personas live in `E:\cb-core\profiles\{profile_id}.json`:
@@ -99,6 +106,17 @@ Personas live in `E:\cb-core\profiles\{profile_id}.json`:
 - Load: read the JSON file directly.
 - Check: `mcp__answer__get_persona(profile_id="...")`
 - Create: `mcp__answer__assign_persona(profile_id="...", facts={...})`
+
+---
+
+## Session Start Checklist
+
+On every session start (including after Remote Control reconnects):
+1. `mcp__sqlite__read_query("SELECT * FROM health_issues WHERE status='pending'")` — check for daemon-flagged failures.
+2. For each pending issue: attempt to fix (restart the MCP via PowerShell, check logs in `E:\cb-core\logs\`).
+3. On success: `mcp__sqlite__write_query("UPDATE health_issues SET status='resolved' WHERE id=<id>")`.
+4. Notify via Telegram: "Fixed: <module> (port <port>). System healthy."
+5. If unfixable: notify Telegram and leave status as 'pending' for manual review.
 
 ---
 

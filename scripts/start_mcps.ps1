@@ -14,7 +14,8 @@ $servers = @(
     @{ mod = "telegram_mcp.server";  port = 8706 },
     @{ mod = "answer_mcp.server";    port = 8707 },
     @{ mod = "sqlite_mcp.server";    port = 8708 },
-    @{ mod = "memory_mcp.server";    port = 8709 }
+    @{ mod = "memory_mcp.server";    port = 8709 },
+    @{ mod = "dom_mcp.server";       port = 8710 }
 )
 
 foreach ($s in $servers) {

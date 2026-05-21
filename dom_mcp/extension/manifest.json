@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "CB DOM Relay",
+  "version": "1.0.0",
+  "description": "Relays live page DOM to the local CareerBridge agent (read-only, no injection).",
+  "host_permissions": [
+    "http://127.0.0.1:8711/"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dom_walker.js", "relay.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}

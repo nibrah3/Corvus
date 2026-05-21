@@ -44,7 +44,36 @@ Register-ScheduledTask `
 
 Write-Host ""
 Write-Host "Task '$taskName' registered."
-Write-Host "It will run automatically at next login."
+
+# ── Health daemon ─────────────────────────────────────────────────────────────
+
+$daemonName    = "CareerBridge-Health"
+$daemonWrapper = "E:\cb-core\scripts\start_health_daemon.ps1"
+$pwshExe       = "powershell.exe"
+
+Unregister-ScheduledTask -TaskName $daemonName -Confirm:$false -ErrorAction SilentlyContinue
+
+$daemonAction = New-ScheduledTaskAction `
+    -Execute $pwshExe `
+    -Argument "-NonInteractive -WindowStyle Hidden -File `"$daemonWrapper`"" `
+    -WorkingDirectory "E:\cb-core"
+
+$daemonSettings = New-ScheduledTaskSettingsSet `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 0) `
+    -RestartCount 999 `
+    -RestartInterval (New-TimeSpan -Minutes 1) `
+    -StartWhenAvailable
+
+Register-ScheduledTask `
+    -TaskName   $daemonName `
+    -Action     $daemonAction `
+    -Trigger    $trigger `
+    -Settings   $daemonSettings `
+    -Principal  $principal `
+    -Description "CareerBridge: health daemon — monitors MCP ports and auto-restarts failed servers"
+
+Write-Host "Task '$daemonName' registered."
 Write-Host ""
-Write-Host "To start it now without rebooting:"
+Write-Host "To start both now without rebooting:"
 Write-Host "  Start-ScheduledTask -TaskName '$taskName'"
+Write-Host "  Start-ScheduledTask -TaskName '$daemonName'"

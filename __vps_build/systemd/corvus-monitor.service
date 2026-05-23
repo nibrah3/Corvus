@@ -1,0 +1,18 @@
+[Unit]
+Description=CareerBridge Application Monitor (one-shot)
+After=corvus-mcps.service
+Requires=corvus-mcps.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/corvus
+EnvironmentFile=/opt/corvus/.env
+ExecStart=/usr/local/bin/claude --print "Run application status check: call postgres_mcp.list_jobs(status='applied') and check if any need follow-up. Call postgres_mcp.list_jobs(status='assessment_needed') and push any to corvus:assessment_queue via redis-cli. Update postgres for any status changes. If changes found, send brief Telegram summary via telegram_mcp.notify." --dangerously-skip-permissions
+TimeoutStartSec=300
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=corvus-monitor
+
+[Install]
+WantedBy=multi-user.target

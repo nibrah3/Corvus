@@ -46,6 +46,8 @@ SERVERS = [
     ("sqlite_mcp.server",    8708),
     ("memory_mcp.server",    8709),
     ("dom_mcp.server",       8710),
+    ("cdp_mcp.server",       8712),
+    ("vps_mcp.server",       8713),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────

@@ -1,0 +1,23 @@
+[Unit]
+Description=CareerBridge VPS MCP Health Check + Restart
+After=corvus-mcps.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/corvus/mcp_servers
+EnvironmentFile=/opt/corvus/.env
+ExecStart=/bin/bash -c "\
+  for port in 8801 8802 8803; do \
+    ss -tlnp | grep -q \":$port \" || { \
+      echo \"Port $port down, restarting MCPs\"; \
+      bash /opt/corvus/mcp_servers/start_mcps.sh; \
+      break; \
+    }; \
+  done"
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=corvus-mcps-restart
+
+[Install]
+WantedBy=multi-user.target

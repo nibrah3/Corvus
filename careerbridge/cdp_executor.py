@@ -22,10 +22,26 @@
 from __future__ import annotations
 
 import json
+import math
+import os
+import random
+import sys
 import threading
 import time
 import urllib.request
-from typing import Any, Optional
+from typing import Any, List, Optional, Tuple
+
+# OS humanizer — real HID events via pyinterception / pynput
+# Import from sibling package so clicks are indistinguishable from physical input.
+_HAS_OS_HUMANIZER = False
+try:
+    _cb_core = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+    if _cb_core not in sys.path:
+        sys.path.insert(0, _cb_core)
+    from humanizer_mcp._mouse import click as _hum_click  # type: ignore
+    _HAS_OS_HUMANIZER = True
+except Exception:
+    pass
 
 _CONNECT_TIMEOUT  = 3.0    # seconds for HTTP probe
 _RECV_TIMEOUT     = 15.0   # seconds to wait for a CDP response
@@ -126,8 +142,15 @@ class CDPExecutor:
         self._pending: dict          = {}     # id → (Event, list[response])
         self._lock    = threading.Lock()
         self._connected: bool        = False
+        self._ws_ready  = threading.Event()  # set when WS handshake completes
+        # Track simulated cursor position for realistic path generation
+        self._cursor_x: float        = 400.0
+        self._cursor_y: float        = 300.0
 
     # ── Connection ─────────────────────────────────────────────────────────────
+
+    def _on_open(self, ws) -> None:
+        self._ws_ready.set()
 
     def connect(self, port: Optional[int] = None) -> int:
         """Auto-discover ixBrowser port (or use supplied port) and attach."""
@@ -146,15 +169,21 @@ class CDPExecutor:
 
         ws_url = pages[0]["webSocketDebuggerUrl"]
 
+        self._ws_ready.clear()
         self._ws = websocket.WebSocketApp(
             ws_url,
+            on_open=self._on_open,
             on_message=self._on_message,
             on_error=self._on_error,
             on_close=self._on_close,
         )
         thread = threading.Thread(target=self._ws.run_forever, daemon=True)
         thread.start()
-        time.sleep(0.8)   # let the WS handshake complete
+
+        # Wait for confirmed handshake (up to 8 seconds)
+        if not self._ws_ready.wait(timeout=8.0):
+            raise CDPError(f"WebSocket handshake timed out for {ws_url}")
+        time.sleep(0.1)  # small buffer after open
 
         # Enable the domains we'll use
         self._send("DOM.enable")
@@ -258,11 +287,31 @@ class CDPExecutor:
 
     # ── Click ─────────────────────────────────────────────────────────────────
 
-    def click_selector(self, selector: str) -> None:
+    def _get_screen_offset(self) -> Tuple[float, float]:
         """
-        Click an element by CSS selector.
-        Uses getBoundingClientRect → dispatches mouse events at element centre.
+        Return (offset_x, offset_y) to convert viewport coords to screen coords.
+        offset_x = window.screenX (left edge of browser window on screen)
+        offset_y = window.screenY + (outerHeight - innerHeight)  (top of content area)
+        The chrome delta covers tab bar + address bar + bookmarks bar.
         """
+        r = self.eval_js(
+            "({sx: window.screenX, sy: window.screenY, "
+            "ch: window.outerHeight - window.innerHeight})"
+        ) or {}
+        return float(r.get("sx", 0)), float(r.get("sy", 0)) + float(r.get("ch", 85))
+
+    def _os_click(self, screen_x: float, screen_y: float) -> None:
+        """
+        Deliver a click via the OS humanizer (real HID path, no LLKHF_INJECTED).
+        Falls back to CDP dispatch if the humanizer is unavailable.
+        """
+        if _HAS_OS_HUMANIZER:
+            _hum_click(int(round(screen_x)), int(round(screen_y)))
+        else:
+            self._dispatch_click(screen_x, screen_y)
+
+    def _resolve_element(self, selector: str) -> Tuple[float, float]:
+        """Get viewport center (x, y) of element matching CSS selector."""
         script = f"""
         (function() {{
             var el = document.querySelector({json.dumps(selector)});
@@ -274,12 +323,20 @@ class CDPExecutor:
         result = self.eval_js(script)
         if not result or not result.get("found"):
             raise CDPError(f"Selector not found: {selector!r}")
-        x, y = result["x"], result["y"]
-        self._dispatch_click(x, y)
+        return result["x"], result["y"]
+
+    def click_selector(self, selector: str) -> None:
+        """
+        Click an element by CSS selector using OS-level HID events.
+        CDP resolves the element coordinates; the OS humanizer delivers the click.
+        """
+        vx, vy = self._resolve_element(selector)
+        ox, oy = self._get_screen_offset()
+        self._os_click(ox + vx, oy + vy)
 
     def click_js(self, js_expr: str) -> None:
         """
-        Click an element returned by a JS expression (must return an Element).
+        Click an element returned by a JS expression via OS-level HID events.
         E.g.: click_js('document.querySelector("button[aria-label=Submit]")')
         """
         script = f"""
@@ -293,13 +350,124 @@ class CDPExecutor:
         result = self.eval_js(script)
         if not result or not result.get("found"):
             raise CDPError(f"JS expression returned no element: {js_expr!r}")
-        self._dispatch_click(result["x"], result["y"])
+        vx, vy = result["x"], result["y"]
+        ox, oy = self._get_screen_offset()
+        self._os_click(ox + vx, oy + vy)
+
+    # ── Human-like mouse path generation ─────────────────────────────────────
+
+    @staticmethod
+    def _bezier_path(
+        x0: float, y0: float, x1: float, y1: float, n_steps: int = 30
+    ) -> List[Tuple[float, float]]:
+        """
+        Cubic Bézier path with randomised one-sided control points.
+        Mirrors ghost-cursor's approach: control points biased toward the
+        direction of travel so the cursor curves naturally (not oscillates).
+        """
+        dist = math.hypot(x1 - x0, y1 - y0)
+        jitter = max(15.0, dist * 0.20)
+
+        # Control points: offset perpendicular to the travel vector
+        dx, dy = x1 - x0, y1 - y0
+        perp_x, perp_y = -dy, dx  # perpendicular direction
+        perp_len = math.hypot(perp_x, perp_y) or 1.0
+        perp_x /= perp_len
+        perp_y /= perp_len
+
+        deflect1 = random.uniform(0.1, 0.4) * jitter * random.choice([-1, 1])
+        deflect2 = random.uniform(0.1, 0.3) * jitter * random.choice([-1, 1])
+
+        cx1 = x0 + dx * 0.3 + perp_x * deflect1
+        cy1 = y0 + dy * 0.3 + perp_y * deflect1
+        cx2 = x0 + dx * 0.7 + perp_x * deflect2
+        cy2 = y0 + dy * 0.7 + perp_y * deflect2
+
+        def ease(t: float) -> float:
+            return t * t * (3 - 2 * t)  # smooth-step (slow→fast→slow)
+
+        path = []
+        for i in range(n_steps + 1):
+            t = ease(i / n_steps)
+            u = 1 - t
+            px = u**3*x0 + 3*u**2*t*cx1 + 3*u*t**2*cx2 + t**3*x1
+            py = u**3*y0 + 3*u**2*t*cy1 + 3*u*t**2*cy2 + t**3*y1
+            # Physiological tremor: ±1px Gaussian noise
+            path.append((px + random.gauss(0, 0.6), py + random.gauss(0, 0.6)))
+        return path
+
+    def _move_mouse_to(self, x: float, y: float) -> None:
+        """
+        Dispatch mouseMoved CDP events along a Bézier path from current
+        tracked position to (x, y).  Step delay targets ~180 Hz.
+        """
+        dist = math.hypot(x - self._cursor_x, y - self._cursor_y)
+        if dist < 2:
+            return
+
+        # Fitts's Law: longer moves take more time
+        duration = 0.20 + 0.12 * math.sqrt(dist / 500.0)
+        path = self._bezier_path(self._cursor_x, self._cursor_y, x, y,
+                                  n_steps=max(15, int(dist / 8)))
+        step_delay = duration / len(path)
+        ts = time.time()
+
+        for px, py in path:
+            self._send("Input.dispatchMouseEvent", {
+                "type": "mouseMoved",
+                "x": px, "y": py,
+                "button": "none",
+                "modifiers": 0,
+                "timestamp": ts,
+            })
+            ts += step_delay
+            deadline = time.perf_counter() + step_delay
+            while time.perf_counter() < deadline:
+                pass  # busy-wait for sub-ms accuracy
+
+        self._cursor_x, self._cursor_y = x, y
 
     def _dispatch_click(self, x: float, y: float) -> None:
-        """Send mousePressed + mouseReleased at (x, y) via CDP Input events."""
-        base = {"x": x, "y": y, "button": "left", "clickCount": 1, "modifiers": 0}
+        """
+        Full humanized CDP click:
+          1. Move mouse along Bézier path to target
+          2. 30% chance of overshoot + correction for long moves
+          3. Pre-click hover dwell (ex-Gaussian)
+          4. Tiny jitter on final position (humans don't hit exact center)
+          5. mousePressed → hold → mouseReleased
+        """
+        dist = math.hypot(x - self._cursor_x, y - self._cursor_y)
+
+        # Overshoot on long moves (>280px, 30% chance)
+        if dist > 280 and random.random() < 0.30:
+            angle = random.uniform(0, 2 * math.pi)
+            over = random.randint(3, 9)
+            ox, oy = x + over * math.cos(angle), y + over * math.sin(angle)
+            self._move_mouse_to(ox, oy)
+            time.sleep(random.uniform(0.04, 0.11))
+            self._cursor_x, self._cursor_y = ox, oy
+
+        self._move_mouse_to(x, y)
+
+        # Pre-click hover: ex-Gaussian (mean ~120ms)
+        hover = max(0.06, random.gauss(0.10, 0.03) + random.expovariate(14))
+        time.sleep(hover)
+
+        # Micro-jitter: click 0-2px from exact center (humans aren't perfect)
+        jx = x + random.uniform(-2, 2)
+        jy = y + random.uniform(-2, 2)
+        ts = time.time()
+
+        base = {"x": jx, "y": jy, "button": "left", "clickCount": 1,
+                "modifiers": 0, "timestamp": ts}
         self._send("Input.dispatchMouseEvent", {**base, "type": "mousePressed"})
-        self._send("Input.dispatchMouseEvent", {**base, "type": "mouseReleased"})
+        # Ex-Gaussian hold: mean ~95ms, tail up to ~200ms
+        hold = max(0.04, random.gauss(0.08, 0.022) + random.expovariate(15))
+        time.sleep(hold)
+        self._send("Input.dispatchMouseEvent", {**base, "type": "mouseReleased",
+                                                 "timestamp": ts + hold})
+        # Post-click micro-drift (humans don't freeze after clicking)
+        time.sleep(random.uniform(0.03, 0.07))
 
     def dispatch_click(self, x: float, y: float) -> None:
         """Click at viewport coordinates (x, y) — public alias for coordinate-based clicks."""
@@ -307,25 +475,164 @@ class CDPExecutor:
 
     # ── Typing ────────────────────────────────────────────────────────────────
 
+    # Key code → (windowsVirtualKeyCode, code string) for special keys
+    _SPECIAL_KEYS: dict = {
+        "\n":  (13,  "Enter",     "Enter"),
+        "\r":  (13,  "Enter",     "Enter"),
+        "\t":  (9,   "Tab",       "Tab"),
+        "\b":  (8,   "Backspace", "Backspace"),
+        " ":   (32,  "Space",     " "),
+    }
+
     def type_text(self, text: str) -> None:
         """
-        Inject text character-by-character via CDP Input.insertText events.
-        Applies Gaussian inter-key delay for natural timing.
+        Type text via CDP Input.dispatchKeyEvent (keyDown + char + keyUp).
+        Fires keydown/keypress/keyup browser events — unlike insertText which
+        bypasses them and is trivially detectable.
+
+        Timing: ex-Gaussian IKI + bigram acceleration + fatigue.
+        Error simulation: 3% QWERTY-adjacent typo followed by Backspace.
         """
-        for ch in text:
-            self._send("Input.insertText", {"text": ch})
+        prev = ""
+        chars_typed = 0
+        _qwerty_adj: dict = {
+            'a': 'qwsz', 'b': 'vghn', 'c': 'xdfv', 'd': 'sexcrf',
+            'e': 'wrsdf', 'f': 'drtgvc', 'g': 'ftyhjb', 'h': 'gyujnb',
+            'i': 'uojk', 'j': 'hukimn', 'k': 'jilom', 'l': 'kop',
+            'm': 'njk', 'n': 'bhjm', 'o': 'iplk', 'p': 'ol',
+            'q': 'wa', 'r': 'etdf', 's': 'qwedxza', 't': 'ryfg',
+            'u': 'yihj', 'v': 'cfgb', 'w': 'qeasz', 'x': 'zsdc',
+            'y': 'tugh', 'z': 'asx',
+        }
+
+        for i, ch in enumerate(text):
+            # QWERTY typo at ~3% rate (alphabetic chars only)
+            if ch.isalpha() and random.random() < 0.03:
+                adj = _qwerty_adj.get(ch.lower(), "")
+                if adj:
+                    wrong = random.choice(adj)
+                    self._dispatch_key_event(wrong)
+                    time.sleep(max(0.08, random.gauss(0.16, 0.05)))
+                    self._dispatch_key_event("\b")  # backspace
+                    time.sleep(max(0.04, random.gauss(0.07, 0.02)))
+
+            self._dispatch_key_event(ch)
+            chars_typed += 1
+
+            if i < len(text) - 1:
+                # Ex-Gaussian IKI
+                iki = max(0.035, random.gauss(0.065, 0.022) + random.expovariate(13))
+
+                # Bigram acceleration for common English pairs
+                bigram = (prev + ch).lower()
+                fast = {'th', 'he', 'in', 'er', 'an', 're', 'on', 'at', 'st',
+                        'nd', 'to', 'io', 'or', 'is', 'it', 'ng', 've', 'me'}
+                if bigram in fast:
+                    iki *= 0.62
+                elif prev and ch and prev.lower() in 'aeiou' and ch.lower() not in 'aeiou':
+                    iki *= 0.90  # vowel→consonant is slightly faster
+
+                # Fatigue: 0.04% slowdown per char
+                iki *= 1.0 + chars_typed * 0.0004
+
+                # Longer pause after spaces and punctuation
+                if ch == " ":
+                    iki *= random.uniform(1.15, 1.40)
+                elif ch in ".,;:!?":
+                    iki *= random.uniform(1.25, 1.70)
+
+                time.sleep(iki)
+
+            prev = ch
+
+    def _dispatch_key_event(self, ch: str) -> None:
+        """Dispatch keyDown + char + keyUp for one character or special key."""
+        ts = time.time()
+        hold = max(0.018, random.gauss(0.045, 0.012))
+
+        if ch in self._SPECIAL_KEYS:
+            vk, code, key = self._SPECIAL_KEYS[ch]
+            self._send("Input.dispatchKeyEvent", {
+                "type": "keyDown", "key": key, "code": code,
+                "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk,
+                "modifiers": 0, "timestamp": ts,
+            })
+            time.sleep(hold)
+            self._send("Input.dispatchKeyEvent", {
+                "type": "keyUp", "key": key, "code": code,
+                "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk,
+                "modifiers": 0, "timestamp": ts + hold,
+            })
+        else:
+            vk = ord(ch.upper()) if ch.isalpha() else ord(ch)
+            self._send("Input.dispatchKeyEvent", {
+                "type": "keyDown", "key": ch, "code": f"Key{ch.upper()}" if ch.isalpha() else "Unidentified",
+                "windowsVirtualKeyCode": vk, "modifiers": 0, "timestamp": ts,
+            })
+            time.sleep(hold * 0.4)
+            self._send("Input.dispatchKeyEvent", {
+                "type": "char", "key": ch, "text": ch,
+                "modifiers": 0, "timestamp": ts + hold * 0.4,
+            })
+            time.sleep(hold * 0.6)
+            self._send("Input.dispatchKeyEvent", {
+                "type": "keyUp", "key": ch, "code": f"Key{ch.upper()}" if ch.isalpha() else "Unidentified",
+                "windowsVirtualKeyCode": vk, "modifiers": 0, "timestamp": ts + hold,
+            })
 
     # ── Scroll ────────────────────────────────────────────────────────────────
 
     def scroll(self, direction: str = "down", clicks: int = 3) -> None:
-        """Scroll the page using window.scrollBy (works on all page types)."""
-        delta = clicks * 300 if direction == "down" else -clicks * 300
-        for _ in range(abs(clicks)):
-            self.eval_js(f"window.scrollBy(0, {delta // abs(clicks)})")
+        """
+        Scroll via CDP Input.dispatchMouseEvent mouseWheel events.
+        Fires native wheel listeners (unlike window.scrollBy which bypasses them).
+        Uses multi-burst pattern with Weibull-distributed pauses.
+        """
+        dy_per_notch = 100  # px per notch (Chrome default wheel delta)
+        dy_sign = -1 if direction == "down" else 1
+        remaining = clicks
+
+        while remaining > 0:
+            burst = min(remaining, random.choices([1, 2, 3], weights=[3, 5, 2])[0])
+            remaining -= burst
+            ts = time.time()
+
+            self._send("Input.dispatchMouseEvent", {
+                "type": "mouseWheel",
+                "x": self._cursor_x,
+                "y": self._cursor_y,
+                "deltaX": 0,
+                "deltaY": dy_sign * burst * dy_per_notch,
+                "modifiers": 0,
+                "timestamp": ts,
+            })
+
+            if remaining > 0:
+                # Weibull inter-burst pause (shape 1.5, scale 0.13 → ~100ms modal)
+                k, lam = 1.5, 0.13
+                u = random.random()
+                if u >= 1.0:
+                    u = 0.9999
+                pause = max(0.05, lam * (-math.log(1 - u)) ** (1 / k))
+                time.sleep(pause)
 
     def navigate(self, url: str, timeout: float = 25.0) -> None:
-        """Navigate to a URL and wait for document.readyState === 'complete'."""
-        self._send("Page.navigate", {"url": url})
+        """
+        Navigate to url and wait for readyState=complete. Falls back to JS
+        location assignment if Page.navigate times out (in-flight nav conflict).
+        """
+        try:
+            self._send("Page.enable")
+            self._send("Page.navigate", {"url": url})
+        except CDPError:
+            try:
+                self._send("Runtime.evaluate", {
+                    "expression":    f"window.location.href = {json.dumps(url)}",
+                    "returnByValue": False,
+                    "awaitPromise":  False,
+                })
+            except CDPError:
+                pass
         self.wait_for_load(timeout=timeout)
 
     # ── Load waiting ──────────────────────────────────────────────────────────
@@ -369,6 +676,7 @@ class CDPExecutor:
                 return data
             time.sleep(1.0)
         raise CDPError("CDP screenshot returned empty data after 3 attempts")
+
 
     # ── JS evaluation ─────────────────────────────────────────────────────────
 

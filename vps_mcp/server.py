@@ -121,11 +121,21 @@ def approve_job(job_id: int) -> dict:
     try:
         conn = _pg()
         cur = conn.cursor(cursor_factory=__import__("psycopg2.extras", fromlist=["RealDictCursor"]).RealDictCursor)
-        cur.execute("UPDATE jobs SET status='approved', approved_at=NOW() WHERE id=%s RETURNING id, url, title", (job_id,))
+        cur.execute(
+            "UPDATE jobs SET status='approved', approved_at=NOW() WHERE id=%s "
+            "RETURNING id, url, title, company, profile_id",
+            (job_id,)
+        )
         row = cur.fetchone()
         if not row:
             return {"error": f"Job {job_id} not found"}
-        payload = json.dumps({"job_id": job_id, "url": row["url"], "title": row.get("title", "")})
+        payload = json.dumps({
+            "job_id":     job_id,
+            "url":        row["url"],
+            "title":      row.get("title") or "",
+            "company":    row.get("company") or "",
+            "profile_id": row.get("profile_id") or "",
+        })
         _redis_rpush("corvus:approved_jobs", payload)
         # Remove from pending approvals if present
         pending = _redis_lrange("corvus:pending_approvals", 0, -1)
@@ -285,9 +295,12 @@ def upsert_profile(
     experience: str = "",
     education: str = "",
     big_five: str = "",
-    response_bias: str = ""
+    response_bias: str = "",
+    imap_password: str = "",
+    imap_server: str = "imap.gmail.com",
+    imap_port: int = 993
 ) -> dict:
-    """Create or update a candidate profile on VPS postgres."""
+    """Create or update a candidate profile on VPS postgres (including IMAP credentials)."""
     try:
         conn = _pg()
         cur = conn.cursor()
@@ -295,17 +308,21 @@ def upsert_profile(
             """
             INSERT INTO profiles
                 (id, name, email, phone, location, bio, skills, experience,
-                 education, big_five, response_bias, updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())
+                 education, big_five, response_bias,
+                 imap_password, imap_server, imap_port, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 name=EXCLUDED.name, email=EXCLUDED.email, phone=EXCLUDED.phone,
                 location=EXCLUDED.location, bio=EXCLUDED.bio, skills=EXCLUDED.skills,
                 experience=EXCLUDED.experience, education=EXCLUDED.education,
                 big_five=EXCLUDED.big_five, response_bias=EXCLUDED.response_bias,
+                imap_password=COALESCE(NULLIF(EXCLUDED.imap_password,''), profiles.imap_password),
+                imap_server=COALESCE(NULLIF(EXCLUDED.imap_server,''), profiles.imap_server),
+                imap_port=EXCLUDED.imap_port,
                 updated_at=NOW()
             """,
             (id, name, email, phone, location, bio, skills, experience,
-             education, big_five, response_bias)
+             education, big_five, response_bias, imap_password, imap_server, imap_port)
         )
         return {"ok": True, "profile_id": id}
     except Exception as e:

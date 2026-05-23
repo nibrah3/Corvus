@@ -5,30 +5,51 @@
 #
 # Public API (synchronous):
 #   ex = CDPExecutor()
-#   ex.connect()              # auto-discover port
+#   ex.connect()              # auto-discover port (tries 9222 first)
 #   ex.connect(port=9222)     # or supply port directly
 #   tree = ex.get_axtree()    # [{nodeId, role, name, properties, childIds}, ...]
 #   ex.click_selector("#id")  # CDP click by CSS selector
 #   ex.click_js(expr)         # evaluate JS expression that returns an element
-#   ex.type_text("hello")     # CDP keyboard injection with Gaussian jitter
+#   ex.dispatch_click(x, y)   # CDP click at viewport coordinates
+#   ex.type_text("hello")     # CDP keyboard injection
 #   ex.scroll("down", 3)      # CDP mouse-wheel scroll
+#   ex.navigate(url)          # navigate and wait for readyState=complete
+#   ex.inject_stealth()       # inject stealth JS into future page loads
+#   ex.screenshot_b64()       # CDP screenshot → base64 PNG string
 #   ex.eval_js(expr)          # evaluate JS → JSON result
 #   ex.disconnect()
 
 from __future__ import annotations
 
 import json
-import math
-import random
 import threading
 import time
 import urllib.request
 from typing import Any, Optional
 
 _CONNECT_TIMEOUT  = 3.0    # seconds for HTTP probe
-_RECV_TIMEOUT     = 10.0   # seconds to wait for a CDP response
+_RECV_TIMEOUT     = 15.0   # seconds to wait for a CDP response
 _IX_NAMES         = {"ixbrowser.exe", "ixbrowser", "chrome.exe", "chromium.exe",
                      "google chrome.exe"}
+
+# Minimal stealth bundle — confirmed CONSISTENT on Pixelscan with no masking detection.
+# Only patches that ixBrowser cannot handle natively at the C++ level.
+# DO NOT add: timezone override, languages defineProperty, permissions.query replacement,
+# outerWidth/Height, or userAgentData overrides — all cause Pixelscan masking detection.
+_STEALTH_JS = r"""
+(function() {
+    Object.keys(window).filter(function(k) {
+        return k.startsWith('cdc_') || k.includes('__puppeteer') || k.includes('__selenium');
+    }).forEach(function(k) { try { delete window[k]; } catch(e) {} });
+    if (!window.chrome) window.chrome = {};
+    if (!window.chrome.runtime) window.chrome.runtime = {
+        id: undefined,
+        connect: function() {},
+        sendMessage: function() {},
+        onMessage: { addListener: function() {}, removeListener: function() {} }
+    };
+})();
+"""
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
@@ -47,9 +68,17 @@ def _http_get(url: str) -> Any:
 
 def discover_cdp_port() -> int:
     """
-    Scan running processes for ixBrowser / Chrome and return the first port
-    that responds to the CDP /json/version probe.
+    Return the ixBrowser CDP port. Tries 9222 first (fast path), then falls
+    back to scanning process TCP connections for any listening Chrome/ixBrowser port.
     """
+    # Fast path — ixBrowser always uses 9222 when launched via direct_launch_cdp.py
+    try:
+        data = _http_get("http://127.0.0.1:9222/json/version")
+        if "webSocketDebuggerUrl" in data:
+            return 9222
+    except Exception:
+        pass
+
     try:
         import psutil
     except ImportError:
@@ -130,6 +159,8 @@ class CDPExecutor:
         # Enable the domains we'll use
         self._send("DOM.enable")
         self._send("Accessibility.enable")
+        self._send("Page.enable")
+        self._send("Page.addScriptToEvaluateOnNewDocument", {"source": _STEALTH_JS})
         self._connected = True
 
         return self._port
@@ -268,8 +299,11 @@ class CDPExecutor:
         """Send mousePressed + mouseReleased at (x, y) via CDP Input events."""
         base = {"x": x, "y": y, "button": "left", "clickCount": 1, "modifiers": 0}
         self._send("Input.dispatchMouseEvent", {**base, "type": "mousePressed"})
-        time.sleep(random.gauss(0.08, 0.02))  # hold duration jitter
         self._send("Input.dispatchMouseEvent", {**base, "type": "mouseReleased"})
+
+    def dispatch_click(self, x: float, y: float) -> None:
+        """Click at viewport coordinates (x, y) — public alias for coordinate-based clicks."""
+        self._dispatch_click(x, y)
 
     # ── Typing ────────────────────────────────────────────────────────────────
 
@@ -280,9 +314,6 @@ class CDPExecutor:
         """
         for ch in text:
             self._send("Input.insertText", {"text": ch})
-            # Ex-Gaussian IKI: normal core + exponential tail
-            iki = random.gauss(0.07, 0.025) + random.expovariate(12)
-            time.sleep(max(0.03, iki))
 
     # ── Scroll ────────────────────────────────────────────────────────────────
 
@@ -291,21 +322,53 @@ class CDPExecutor:
         delta = clicks * 300 if direction == "down" else -clicks * 300
         for _ in range(abs(clicks)):
             self.eval_js(f"window.scrollBy(0, {delta // abs(clicks)})")
-            time.sleep(random.gauss(0.12, 0.03))
 
-    def navigate(self, url: str, timeout: float = 10.0) -> None:
-        """Navigate to a URL and wait for the page to finish loading."""
-        self._send("Page.enable")
-        nav = self._send("Page.navigate", {"url": url})
-        frame_id = nav.get("frameId")
+    def navigate(self, url: str, timeout: float = 25.0) -> None:
+        """Navigate to a URL and wait for document.readyState === 'complete'."""
+        self._send("Page.navigate", {"url": url})
+        self.wait_for_load(timeout=timeout)
+
+    # ── Load waiting ──────────────────────────────────────────────────────────
+
+    def wait_for_load(self, timeout: float = 25.0) -> None:
+        """Poll until document.readyState === 'complete' or timeout."""
         deadline = time.time() + timeout
-        # Poll until the URL changes or timeout
         while time.time() < deadline:
-            current = self.eval_js("location.href") or ""
-            if url in current or current != "about:blank":
-                time.sleep(0.5)
-                break
-            time.sleep(0.2)
+            try:
+                if self.eval_js("document.readyState") == "complete":
+                    return
+            except Exception:
+                pass
+            time.sleep(0.3)
+
+    # ── Stealth ───────────────────────────────────────────────────────────────
+
+    def inject_stealth(self) -> None:
+        """
+        Register the stealth JS bundle to run on every new document load.
+        Already called automatically by connect() — call this again only if
+        you reconnect to a different page or need to re-register after a crash.
+        """
+        self._send("Page.addScriptToEvaluateOnNewDocument", {"source": _STEALTH_JS})
+
+    # ── Screenshot ────────────────────────────────────────────────────────────
+
+    def screenshot_b64(self) -> str:
+        """
+        Capture the current page via CDP and return a base64-encoded PNG.
+        Works regardless of window focus or visibility — no Win32 required.
+        Retries up to 3 times on empty response.
+        """
+        for _ in range(3):
+            result = self._send("Page.captureScreenshot", {
+                "format": "png",
+                "captureBeyondViewport": False,
+            })
+            data = result.get("data")
+            if data:
+                return data
+            time.sleep(1.0)
+        raise CDPError("CDP screenshot returned empty data after 3 attempts")
 
     # ── JS evaluation ─────────────────────────────────────────────────────────
 

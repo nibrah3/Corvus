@@ -111,11 +111,15 @@ class CDPExecutor:
         self._pending: dict          = {}     # id → (Event, list[response])
         self._lock    = threading.Lock()
         self._connected: bool        = False
+        self._ws_ready  = threading.Event()  # set when WS handshake completes
         # Track simulated cursor position for realistic path generation
         self._cursor_x: float        = 400.0
         self._cursor_y: float        = 300.0
 
     # ── Connection ─────────────────────────────────────────────────────────────
+
+    def _on_open(self, ws) -> None:
+        self._ws_ready.set()
 
     def connect(self, port: Optional[int] = None) -> int:
         """Auto-discover ixBrowser port (or use supplied port) and attach."""
@@ -134,15 +138,21 @@ class CDPExecutor:
 
         ws_url = pages[0]["webSocketDebuggerUrl"]
 
+        self._ws_ready.clear()
         self._ws = websocket.WebSocketApp(
             ws_url,
+            on_open=self._on_open,
             on_message=self._on_message,
             on_error=self._on_error,
             on_close=self._on_close,
         )
         thread = threading.Thread(target=self._ws.run_forever, daemon=True)
         thread.start()
-        time.sleep(0.8)   # let the WS handshake complete
+
+        # Wait for confirmed handshake (up to 8 seconds)
+        if not self._ws_ready.wait(timeout=8.0):
+            raise CDPError(f"WebSocket handshake timed out for {ws_url}")
+        time.sleep(0.1)  # small buffer after open
 
         # Enable the domains we'll use
         self._send("DOM.enable")
@@ -570,18 +580,29 @@ class CDPExecutor:
                 time.sleep(pause)
 
     def navigate(self, url: str, timeout: float = 10.0) -> None:
-        """Navigate to a URL and wait for the page to finish loading."""
-        self._send("Page.enable")
-        nav = self._send("Page.navigate", {"url": url})
-        frame_id = nav.get("frameId")
-        deadline = time.time() + timeout
-        # Poll until the URL changes or timeout
-        while time.time() < deadline:
-            current = self.eval_js("location.href") or ""
-            if url in current or current != "about:blank":
-                time.sleep(0.5)
-                break
-            time.sleep(0.2)
+        """
+        Navigate to url via Page.navigate CDP command.
+        Uses Page.navigate for clean, event-driven navigation. If a prior
+        navigation is in-flight (causing a CDP response race), falls back to
+        JS location assignment with a fixed sleep.
+        """
+        try:
+            self._send("Page.enable")
+            self._send("Page.navigate", {"url": url})
+            time.sleep(0.4)
+        except CDPError:
+            # Page.navigate timed out (in-flight navigation conflict) —
+            # inject via JS and give the runtime time to reset
+            try:
+                self._send("Runtime.evaluate", {
+                    "expression":    f"window.location.href = {json.dumps(url)}",
+                    "returnByValue": False,
+                    "awaitPromise":  False,
+                })
+            except CDPError:
+                pass
+            time.sleep(max(0.6, timeout * 0.05))
+
 
     # ── JS evaluation ─────────────────────────────────────────────────────────
 

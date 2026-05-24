@@ -68,7 +68,7 @@ from telegram.constants import ParseMode
 
 BOT_TOKEN     = os.environ["TELEGRAM_BOT_TOKEN"]
 ADMIN_CHAT_ID = int(os.environ["TELEGRAM_ADMIN_CHAT_ID"])
-WEBAPP_URL    = "https://nibrah3.github.io/Corvus/"
+WEBAPP_URL    = "https://nibrah3.github.io/Corvus/webapp/"
 PAGE_SIZE     = 5
 POLL_INTERVAL = 300   # 5 min
 

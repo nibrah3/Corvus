@@ -1,0 +1,17 @@
+[Unit]
+Description=CareerBridge static JSON exporter for GitHub Pages (one-shot)
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/corvus
+EnvironmentFile=/opt/corvus/.env
+ExecStart=/usr/bin/python3 /opt/corvus/__vps_build/export_webapp_data.py --push
+TimeoutStartSec=120
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=corvus-export
+
+[Install]
+WantedBy=multi-user.target

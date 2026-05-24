@@ -1,0 +1,18 @@
+[Unit]
+Description=CareerBridge School Scraper (one-shot)
+After=corvus-mcps.service
+Requires=corvus-mcps.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/corvus
+EnvironmentFile=/opt/corvus/.env
+ExecStart=/usr/bin/python3 /opt/corvus/__vps_build/school_scraper.py --source all --limit 500
+TimeoutStartSec=3600
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=corvus-school-scraper
+
+[Install]
+WantedBy=multi-user.target

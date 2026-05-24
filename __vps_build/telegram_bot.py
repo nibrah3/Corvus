@@ -72,6 +72,17 @@ WEBAPP_URL    = "https://nibrah3.github.io/Corvus/webapp/"
 PAGE_SIZE     = 5
 POLL_INTERVAL = 300   # 5 min
 
+# Private service — only these Telegram user IDs may interact with the bot.
+# Add additional IDs here if you ever share access with a trusted person.
+_WHITELIST: frozenset[int] = frozenset({ADMIN_CHAT_ID})
+
+# Bot persona — sets the voice for all user-facing messages.
+_BOT_PERSONA = (
+    "CareerBridge is your personal remote-work intelligence assistant. "
+    "It surfaces verified opportunities — annotation gigs, remote jobs, online schools — "
+    "matched to your workflow. Responses are concise, direct, and action-oriented."
+)
+
 
 # ── DB ─────────────────────────────────────────────────────────────────────────
 
@@ -101,9 +112,26 @@ def db_query(sql: str, params: tuple = (), many: bool = False):
         return [] if many else None
 
 
-# ── Permission decorator ───────────────────────────────────────────────────────
+# ── Permission decorators ──────────────────────────────────────────────────────
+
+def private_only(func):
+    """Gate: only whitelisted users may interact with the bot at all."""
+    @wraps(func)
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        uid = update.effective_user.id if update.effective_user else None
+        if uid not in _WHITELIST:
+            log.info("Blocked non-whitelisted user %s", uid)
+            if update.effective_message:
+                await update.effective_message.reply_text(
+                    "This is a private assistant. Access is restricted."
+                )
+            return
+        return await func(update, ctx)
+    return wrapper
+
 
 def admin_only(func):
+    """Gate: only the admin (ADMIN_CHAT_ID) may call admin commands."""
     @wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         uid = update.effective_user.id if update.effective_user else None
@@ -279,40 +307,47 @@ def fmt_company(c: dict) -> str:
 
 # ── Handlers ───────────────────────────────────────────────────────────────────
 
+@private_only
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     name = update.effective_user.first_name or "there"
-    is_admin = update.effective_user.id == ADMIN_CHAT_ID
-    badge = " _(admin)_" if is_admin else ""
     text = (
-        f"👋 Hey *{_esc(name)}*{badge}\\!\n\n"
-        "*CareerBridge* finds remote jobs, schools, and company career pages "
-        "— and pushes them straight to you\\.\n\n"
-        "Use the buttons below to browse\\."
+        f"👋 Hey *{_esc(name)}*\\!\n\n"
+        "Welcome back to *CareerBridge* — your personal remote work intelligence hub\\.\n\n"
+        "I continuously scan for:\n"
+        "💼 *Annotation & gig jobs* — Scale AI, Remotasks, and more\n"
+        "🎓 *Flexible online schools* — monthly enrollment, no ID, instant acceptance\n"
+        "🏢 *Company career pages* — direct remote hiring pipelines\n\n"
+        "Everything is indexed and ranked for you\\. Tap below to explore\\."
     )
     await update.message.reply_text(
         text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=main_menu_kb()
     )
 
 
+@private_only
 async def cmd_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "📱 *CareerBridge Hub*", parse_mode=ParseMode.MARKDOWN_V2,
+        "📱 *CareerBridge*", parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=main_menu_kb()
     )
 
 
+@private_only
 async def cmd_jobs(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _send_jobs(update, ctx, page=0, sector="all")
 
 
+@private_only
 async def cmd_schools(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _send_schools(update, ctx, page=0, filt="best")
 
 
+@private_only
 async def cmd_discover(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _send_discover(update, ctx, page=0)
 
 
+@private_only
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     jobs      = db_query("SELECT COUNT(*) cnt FROM jobs", many=False)
     companies = db_query("SELECT COUNT(*) cnt FROM discovered_platforms", many=False)
@@ -333,6 +368,7 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+@private_only
 async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "🔍 *Search CareerBridge*\n\nWhat are you looking for?",
@@ -370,6 +406,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ── Callback router ────────────────────────────────────────────────────────────
 
+@private_only
 async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -851,6 +888,7 @@ _QUICK_REPLIES = {
 }
 
 
+@private_only
 async def on_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     text = (update.message.text or "").lower()
 
@@ -881,7 +919,8 @@ async def on_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
             return
     await update.message.reply_text(
-        "Use the menu to browse:", reply_markup=main_menu_kb()
+        "Here's what I can help you with right now:",
+        reply_markup=main_menu_kb()
     )
 
 

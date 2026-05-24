@@ -1,5 +1,5 @@
-import sys
-sys.path.insert(0, 'E:/cb-core')
+﻿import sys
+sys.path.insert(0, 'D:/cb-core')
 
 from humanizer_mcp._profile import BehaviorProfile
 from humanizer_mcp._distributions import sample_iki, bigram_factor, typo_neighbor

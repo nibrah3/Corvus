@@ -1,4 +1,4 @@
-# SOP: Reading Comprehension Assessment
+﻿# SOP: Reading Comprehension Assessment
 
 **Version**: 1.0 — 2026-05-21  
 **Test URL**: https://www.testprepreview.com/modules/reading1.htm  
@@ -26,7 +26,7 @@
 4. Verify DOM relay has data:
    - Call `get_page_context` via HTTP: `POST http://localhost:8710/mcp`
    - Check: `url` matches, `questions.Count > 0`
-   - If empty: extension not active on this tab → load unpacked from `E:\cb-core\dom_mcp\extension\`
+   - If empty: extension not active on this tab → load unpacked from `D:\cb-core\dom_mcp\extension\`
 
 ---
 
@@ -88,7 +88,7 @@ SELECT * FROM health_issues WHERE status='pending'
 
 Fix any pending issues → `UPDATE health_issues SET status='resolved' WHERE id=<id>`
 
-**Daemon**: `E:\cb-core\scripts\health_daemon.py` — monitors ports 8701–8710 every 30s  
+**Daemon**: `D:\cb-core\scripts\health_daemon.py` — monitors ports 8701–8710 every 30s  
 **Task**: `CareerBridge-Health` registered in Task Scheduler (fixed 2026-05-21)
 
 ---

@@ -18,14 +18,14 @@ import time
 import pyautogui
 
 # Load OPENROUTER_API_KEY from shared .env if not already set
-_ENV_FILE = r"D:\cb-core\runtime\.env"
-if not os.getenv("OPENROUTER_API_KEY") and os.path.exists(_ENV_FILE):
-    with open(_ENV_FILE, encoding="utf-8") as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line.startswith("OPENROUTER_API_KEY=") and "=" in _line:
-                os.environ["OPENROUTER_API_KEY"] = _line.split("=", 1)[1].strip()
-                break
+for _ENV_FILE in (r"D:\cb-core\.env", r"D:\cb-core\runtime\.env"):
+    if not os.getenv("OPENROUTER_API_KEY") and os.path.exists(_ENV_FILE):
+        with open(_ENV_FILE, encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line.startswith("OPENROUTER_API_KEY=") and "=" in _line:
+                    os.environ["OPENROUTER_API_KEY"] = _line.split("=", 1)[1].strip()
+                    break
 
 sys.path.insert(0, r"D:\cb-core")
 
@@ -81,6 +81,7 @@ def run(payload: dict) -> dict:
     window_title = payload.get("window_title", "Chromium")
     mode         = payload.get("mode", "comprehension")
     personality  = _build_personality(payload)
+    profile_id   = (payload.get("profile") or {}).get("profile_id") or None
 
     import pywinauto
 
@@ -138,6 +139,7 @@ def run(payload: dict) -> dict:
                     frame.data, win_x, win_y,
                     personality=personality,
                     mode=mode,
+                    profile_id=profile_id,
                 )
             except Exception as e:
                 outcome = f"gemini_error: {e}"

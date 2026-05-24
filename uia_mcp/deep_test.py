@@ -1,5 +1,5 @@
-import sys
-sys.path.insert(0, 'E:/cb-core')
+﻿import sys
+sys.path.insert(0, 'D:/cb-core')
 from uia_mcp.server import find_elements, focused_window
 
 win = focused_window()

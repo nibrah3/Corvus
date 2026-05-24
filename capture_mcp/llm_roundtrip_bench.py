@@ -1,4 +1,4 @@
-"""
+﻿"""
 LLM Round-Trip Benchmark — 6 screenshot pipelines, no API credits needed.
 
 Measures the parts we control (capture + processing), estimates the LLM part,
@@ -26,13 +26,13 @@ Image token formula (Anthropic):
 from __future__ import annotations
 
 import sys, os, io, time, hashlib, base64, textwrap
-sys.path.insert(0, 'E:/cb-core')
+sys.path.insert(0, 'D:/cb-core')
 
 import numpy as np
 from PIL import Image, ImageFilter
 import mss
 
-OUT_DIR = "E:/cb-core/capture_mcp/samples"
+OUT_DIR = "D:/cb-core/capture_mcp/samples"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # Estimated LLM call latency (ms) — not measured, based on Haiku 4.5 benchmarks

@@ -13,7 +13,7 @@ import socket
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 CB_DIR = Path(__file__).resolve().parent.parent
@@ -41,6 +41,9 @@ MCP_PORTS = {
     8707: "answer_mcp",
     8708: "sqlite_mcp",
     8709: "memory_mcp",
+    8710: "dom_mcp",
+    8712: "cdp_mcp",
+    8713: "vps_mcp",
 }
 
 TUNNEL_PORTS = {
@@ -168,7 +171,7 @@ def repair_tunnel(dead_ports: list[int]) -> bool:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def run() -> dict:
-    now    = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    now    = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     report = {"timestamp": now, "ok": True, "issues": [], "repairs": []}
 
     print(f"\n{'='*55}")
@@ -190,7 +193,7 @@ def run() -> dict:
     mcp_status = check_mcps()
     dead_mcps  = [p for p, up in mcp_status.items() if not up]
     for port, up in sorted(mcp_status.items()):
-        status = "UP  ✓" if up else "DOWN ✗"
+        status = "UP   OK" if up else "DOWN !!"
         print(f"  {port} {MCP_PORTS[port]:15s} {status}")
 
     if dead_mcps:
@@ -210,7 +213,7 @@ def run() -> dict:
     tunnel_status = check_tunnel()
     dead_tunnel   = [p for p, up in tunnel_status.items() if not up]
     for port, up in sorted(tunnel_status.items()):
-        status = "UP  ✓" if up else "DOWN ✗"
+        status = "UP   OK" if up else "DOWN !!"
         print(f"  {port} {TUNNEL_PORTS[port]:25s} {status}")
 
     if dead_tunnel:

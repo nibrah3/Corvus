@@ -161,7 +161,23 @@ def _parse_experience(raw):
 
 # ── CV text builder ────────────────────────────────────────────────────────────
 
-def _build_cv_text(profile, job, keywords):
+def _humanize_cv_summary(summary: str, persona_prompt: str, profile_id: str) -> str:
+    """Rewrite the CV summary section in the profile's natural voice."""
+    try:
+        from answer_mcp._humanize import humanize
+        return humanize(
+            canonical_answer=summary,
+            question="Write a professional summary for my CV",
+            persona_prompt=persona_prompt,
+            profile_id=profile_id,
+            target_words=min(80, len(summary.split()) + 10),
+        )
+    except Exception as e:
+        log.warning("CV summary humanization failed: %s — using canonical", e)
+        return summary
+
+
+def _build_cv_text(profile, job, keywords, persona_prompt: str = ""):
     name     = (profile.get("name") or "").upper()
     email    = profile.get("email") or ""
     phone    = profile.get("phone") or ""
@@ -171,6 +187,7 @@ def _build_cv_text(profile, job, keywords):
     job_title   = job.get("title") or ""
     job_company = job.get("company") or ""
 
+    profile_id     = profile.get("profile_id") or profile.get("id") or ""
     profile_skills = _parse_skills(profile.get("skills"))
     experience     = _parse_experience(profile.get("experience"))
     education_raw  = profile.get("education") or ""
@@ -195,6 +212,10 @@ def _build_cv_text(profile, job, keywords):
             f"Detail-oriented professional with experience in {kw_phrase}. "
             f"Seeking a {job_title} role with {job_company}."
         )
+
+    # Humanize summary through persona — voice only, ATS keywords preserved in skills section
+    if persona_prompt and profile_id:
+        summary = _humanize_cv_summary(summary, persona_prompt, profile_id)
 
     L = []
 
@@ -290,6 +311,30 @@ def _build_pdf(text, path):
 
 # ── Public entry point ─────────────────────────────────────────────────────────
 
+def _load_persona_for_cv(profile: dict) -> str:
+    """Load or auto-generate persona_prompt for CV generation."""
+    profile_id = profile.get("profile_id") or profile.get("id") or ""
+    if not profile_id:
+        return ""
+    try:
+        import sys
+        _root = os.path.normpath(os.path.dirname(__file__))
+        if _root not in sys.path:
+            sys.path.insert(0, _root)
+        from answer_mcp._persona import get_persona_prompt, generate_persona
+        prompt = get_persona_prompt(profile_id)
+        if not prompt:
+            log.info("Auto-generating persona for CV profile %r", profile_id)
+            prompt = generate_persona(profile_id, {
+                "name": profile.get("name", ""),
+                "background": profile.get("bio", "")[:200],
+            })["persona_prompt"]
+        return prompt
+    except Exception as e:
+        log.debug("Persona load for CV failed (non-fatal): %s", e)
+        return ""
+
+
 def generate_cv(profile, job, out_dir="/opt/corvus/cvs"):
     """
     Generate a keyword-tailored CV for the given job.
@@ -312,7 +357,8 @@ def generate_cv(profile, job, out_dir="/opt/corvus/cvs"):
     os.makedirs(out_dir, exist_ok=True)
     keywords = extract_keywords(job.get("description") or "")
     score, matched, missing = score_match(profile, keywords)
-    cv_text = _build_cv_text(profile, job, keywords)
+    persona_prompt = _load_persona_for_cv(profile)
+    cv_text = _build_cv_text(profile, job, keywords, persona_prompt=persona_prompt)
 
     safe_p = re.sub(r"[^a-z0-9_-]", "_", (profile.get("id") or "profile").lower())
     safe_j = re.sub(r"[^a-z0-9_-]", "_", str(job.get("id") or "job").lower())
@@ -326,11 +372,96 @@ def generate_cv(profile, job, out_dir="/opt/corvus/cvs"):
     pdf_ok = _build_pdf(cv_text, pdf_path)
 
     return {
-        "text":     cv_text,
-        "txt_path": txt_path,
-        "pdf_path": pdf_path if pdf_ok else None,
-        "score":    score,
-        "matched":  matched,
-        "missing":  missing,
-        "keywords": keywords,
+        "text":            cv_text,
+        "txt_path":        txt_path,
+        "pdf_path":        pdf_path if pdf_ok else None,
+        "score":           score,
+        "matched":         matched,
+        "missing":         missing,
+        "keywords":        keywords,
+        "persona_applied": bool(persona_prompt),
+    }
+
+
+# ── Cover letter generator ─────────────────────────────────────────────────────
+
+def generate_cover_letter(profile: dict, job: dict, out_dir: str = "/opt/corvus/cvs") -> dict:
+    """
+    Generate a persona-voiced cover letter for the given job.
+
+    The letter is factually grounded (canonical content from profile+job), then
+    rewritten through the profile's locked persona voice so every profile produces
+    a letter that reads distinctly differently while containing the same key facts.
+
+    Args:
+        profile: dict with keys name, email, bio, skills, experience, profile_id/id
+        job:     dict with keys id, title, company, description
+        out_dir: directory to write output file
+
+    Returns dict:
+        text           — cover letter string
+        txt_path       — path to .txt file
+        persona_applied — True if persona humanization ran
+    """
+    name       = profile.get("name") or "Applicant"
+    job_title  = job.get("title") or "the position"
+    company    = job.get("company") or "your company"
+    bio        = (profile.get("bio") or "")[:300]
+    skills     = _parse_skills(profile.get("skills"))[:5]
+    profile_id = profile.get("profile_id") or profile.get("id") or ""
+
+    keywords   = extract_keywords(job.get("description") or "")
+    top_reqs   = keywords["required"][:3]
+    top_tech   = (keywords["tech"])[:4]
+
+    # Canonical letter — factually correct, structured, ATS-safe
+    skill_phrase = ", ".join(skills) if skills else "a range of relevant skills"
+    req_phrase   = "; ".join(top_reqs[:2]) if top_reqs else "the listed requirements"
+    tech_phrase  = ", ".join(top_tech) if top_tech else "relevant technologies"
+
+    canonical = (
+        f"Dear Hiring Manager,\n\n"
+        f"I am writing to apply for the {job_title} role at {company}. "
+        f"{bio + ' ' if bio else ''}"
+        f"I bring hands-on experience with {skill_phrase}, and I am confident "
+        f"I can meet {req_phrase}.\n\n"
+        f"My background with {tech_phrase} aligns directly with your requirements. "
+        f"I am motivated by the opportunity to contribute meaningfully to {company} "
+        f"and grow within a team that values this work.\n\n"
+        f"I would welcome the chance to discuss my application further. "
+        f"Thank you for your time and consideration.\n\n"
+        f"Sincerely,\n{name}"
+    )
+
+    # Humanize through persona
+    persona_prompt = _load_persona_for_cv(profile)
+    cover_text = canonical
+    if persona_prompt and profile_id:
+        try:
+            import sys
+            _root = os.path.normpath(os.path.dirname(__file__))
+            if _root not in sys.path:
+                sys.path.insert(0, _root)
+            from answer_mcp._humanize import humanize
+            cover_text = humanize(
+                canonical_answer=canonical,
+                question=f"Write a cover letter for the {job_title} position at {company}",
+                persona_prompt=persona_prompt,
+                profile_id=profile_id,
+                target_words=220,
+            )
+        except Exception as e:
+            log.warning("Cover letter humanization failed: %s — using canonical", e)
+
+    os.makedirs(out_dir, exist_ok=True)
+    safe_p   = re.sub(r"[^a-z0-9_-]", "_", (profile.get("id") or "profile").lower())
+    safe_j   = re.sub(r"[^a-z0-9_-]", "_", str(job.get("id") or "job").lower())
+    txt_path = os.path.join(out_dir, f"cover_{safe_p}_{safe_j}.txt")
+    with open(txt_path, "w", encoding="utf-8") as f:
+        f.write(cover_text)
+
+    return {
+        "text":            cover_text,
+        "txt_path":        txt_path,
+        "persona_applied": bool(persona_prompt),
     }

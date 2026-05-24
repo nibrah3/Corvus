@@ -1,4 +1,4 @@
-"""
+﻿"""
 check_ixbrowser.py — Check if IXBrowser is running; launch it if not.
 
 Called by Claude Code when [Launch IXBrowser] is selected in AskUserQuestion.
@@ -118,7 +118,7 @@ def main():
             "running": False,
             "launched": False,
             "message": f"IXBrowser not running. Exe found at: {exe}" if exe
-                       else "IXBrowser not running and exe not found. Set IXBROWSER_EXE_PATH in E:\\cb-core\\.env",
+                       else "IXBrowser not running and exe not found. Set IXBROWSER_EXE_PATH in D:\\cb-core\\.env",
         }))
         return
 
@@ -133,7 +133,7 @@ def main():
             "running": False,
             "launched": False,
             "message": f"Could not start IXBrowser. Exe: {exe or 'not found'}. "
-                       "Set IXBROWSER_EXE_PATH in E:\\cb-core\\.env if installed elsewhere.",
+                       "Set IXBROWSER_EXE_PATH in D:\\cb-core\\.env if installed elsewhere.",
         }))
 
 

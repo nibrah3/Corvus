@@ -1,4 +1,4 @@
-"""
+﻿"""
 proxy_manager.py - Manages IPRoyal proxy entries and IXBrowser profile creation.
 
 Ensures each postgres profile gets an IXBrowser profile with a proxy matching
@@ -143,7 +143,7 @@ def ensure_ixbrowser_profile(postgres_id: str, full_name: str, country: str,
     Find or create an IXBrowser profile for the postgres profile, with the
     correct country proxy attached.
 
-    Reads/writes the mapping from E:\\cb-core\\defaults.json.
+    Reads/writes the mapping from D:\\cb-core\\defaults.json.
     Returns the IXBrowser profile_id (int).
     """
     defaults_path = CB_DIR / "defaults.json"

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Live desktop test for humanizer_mcp.
 Opens Notepad, clicks inside, types a paragraph with full timing model.
 Watch the cursor move and keys press on screen.
@@ -7,7 +7,7 @@ import sys
 import subprocess
 import time
 
-sys.path.insert(0, 'E:/cb-core')
+sys.path.insert(0, 'D:/cb-core')
 
 from humanizer_mcp._profile import BehaviorProfile
 from humanizer_mcp._mouse import click as mouse_click, move as mouse_move

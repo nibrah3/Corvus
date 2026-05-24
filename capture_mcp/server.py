@@ -1,4 +1,4 @@
-"""
+﻿"""
 Capture MCP server.
 
 Tools:
@@ -197,7 +197,7 @@ def start_video_capture(fps: int = 30) -> str:
 
 
 @mcp.tool()
-def stop_video_capture(output_path: str = "E:/cb-core/capture_mcp/recording.mp4") -> str:
+def stop_video_capture(output_path: str = "D:/cb-core/capture_mcp/recording.mp4") -> str:
     """
     Stop recording and save frames as MP4.
 

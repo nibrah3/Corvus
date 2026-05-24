@@ -1,4 +1,4 @@
-"""
+﻿"""
 Bot detection live test v2.
 Uses Chrome explicitly by finding its window after launch.
 Closes any blocking dialogs, navigates to 10fastfingers.com, types.
@@ -8,7 +8,7 @@ import subprocess
 import time
 import random
 
-sys.path.insert(0, 'E:/cb-core')
+sys.path.insert(0, 'D:/cb-core')
 
 from humanizer_mcp._profile import BehaviorProfile
 from humanizer_mcp._mouse import click as mouse_click
@@ -41,7 +41,7 @@ time.sleep(1.5)
 
 # Screenshot to see state
 with mss.MSS() as sct:
-    sct.shot(output="E:/cb-core/humanizer_mcp/t2_01_after_open.png")
+    sct.shot(output="D:/cb-core/humanizer_mcp/t2_01_after_open.png")
 print("[1c] Screenshot saved: t2_01_after_open.png")
 
 # ── 2. Click the Chrome window to bring it to foreground ──────────────────────
@@ -56,7 +56,7 @@ print("[2b] Waiting for page to load...")
 time.sleep(3.0)
 
 with mss.MSS() as sct:
-    sct.shot(output="E:/cb-core/humanizer_mcp/t2_02_page_loaded.png")
+    sct.shot(output="D:/cb-core/humanizer_mcp/t2_02_page_loaded.png")
 print("    Screenshot saved: t2_02_page_loaded.png")
 
 # ── 3. Click the typing input area ────────────────────────────────────────────
@@ -67,7 +67,7 @@ mouse_click(680, 500, profile=profile, rng=rng)
 time.sleep(0.6)
 
 with mss.MSS() as sct:
-    sct.shot(output="E:/cb-core/humanizer_mcp/t2_03_clicked_input.png")
+    sct.shot(output="D:/cb-core/humanizer_mcp/t2_03_clicked_input.png")
 print("    Screenshot saved: t2_03_clicked_input.png")
 
 # ── 4. Type — 10fastfingers expects words separated by spaces ─────────────────
@@ -91,7 +91,7 @@ time.sleep(1.5)
 
 # ── 5. Final screenshot ────────────────────────────────────────────────────────
 with mss.MSS() as sct:
-    sct.shot(output="E:/cb-core/humanizer_mcp/t2_04_result.png")
+    sct.shot(output="D:/cb-core/humanizer_mcp/t2_04_result.png")
 print("[5] Screenshot saved: t2_04_result.png")
 
 print(f"\nChars typed: {profile.chars_typed}")

@@ -1,17 +1,17 @@
-"""
+﻿"""
 Per-page action plan benchmark — top 3 pipelines.
 
 Takes one screenshot per pipeline, saves to file, reports capture+process time.
 Claude Code then reads each image and produces a full action plan (the LLM step).
 """
 import sys, io, time, os
-sys.path.insert(0, 'E:/cb-core')
+sys.path.insert(0, 'D:/cb-core')
 
 import numpy as np
 from PIL import Image, ImageFilter
 import mss
 
-OUT = "E:/cb-core/capture_mcp/page_test"
+OUT = "D:/cb-core/capture_mcp/page_test"
 os.makedirs(OUT, exist_ok=True)
 
 def _mss_capture() -> Image.Image:

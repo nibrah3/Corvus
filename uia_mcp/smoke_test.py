@@ -1,6 +1,6 @@
-"""UIA MCP smoke test — dumps interactive elements from the foreground window."""
+﻿"""UIA MCP smoke test — dumps interactive elements from the foreground window."""
 import sys
-sys.path.insert(0, 'E:/cb-core')
+sys.path.insert(0, 'D:/cb-core')
 
 from uia_mcp.server import find_elements, focused_window
 

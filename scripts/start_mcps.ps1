@@ -17,8 +17,22 @@ $servers = @(
     @{ mod = "memory_mcp.server";    port = 8709 },
     @{ mod = "dom_mcp.server";       port = 8710 },
     @{ mod = "cdp_mcp.server";       port = 8712 },
-    @{ mod = "vps_mcp.server";       port = 8713 }
+    @{ mod = "vps_mcp.server";       port = 8713 },
+    @{ mod = "schools_mcp.server";   port = 8714 }
 )
+
+# Load .env so MCP servers that read env vars at startup get the right values
+$envFile = Join-Path (Split-Path $PSScriptRoot -Parent) ".env"
+if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match '^([^#=\s][^=]*)=(.*)$') {
+            $k = $Matches[1].Trim(); $v = $Matches[2].Trim()
+            if (-not [System.Environment]::GetEnvironmentVariable($k)) {
+                [System.Environment]::SetEnvironmentVariable($k, $v)
+            }
+        }
+    }
+}
 
 foreach ($s in $servers) {
     $listening = (Get-NetTCPConnection -LocalPort $s.port -State Listen -ErrorAction SilentlyContinue) -ne $null

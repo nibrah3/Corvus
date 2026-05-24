@@ -3,6 +3,7 @@
 #   localhost:6380 -> VPS:6379  (Redis)
 #   localhost:5433 -> VPS:5432  (Postgres)
 #   localhost:3101 -> VPS:3100  (Crawlee API)
+#   localhost:7788 -> VPS:7788  (Firecrawl self-hosted)
 #
 # Uses cb_tunnel — the PERMANENT, NEVER-ROTATED tunnel key.
 # SSH host config is in ~/.ssh/config (Host cb-vps).
@@ -52,9 +53,10 @@ function Test-PortOpen($port) {
 Write-Host "VPS Tunnel Manager starting..."
 Write-Host "  Key:      $sshKey (PERMANENT — never rotate)"
 Write-Host "  Host:     $vps -> 77.42.91.185"
-Write-Host "  Redis:    localhost:6380 -> VPS:6379"
-Write-Host "  Postgres: localhost:5433 -> VPS:5432"
-Write-Host "  Crawlee:  localhost:3101 -> VPS:3100"
+Write-Host "  Redis:      localhost:6380 -> VPS:6379"
+Write-Host "  Postgres:   localhost:5433 -> VPS:5432"
+Write-Host "  Crawlee:    localhost:3101 -> VPS:3100"
+Write-Host "  Firecrawl:  localhost:7788 -> VPS:7788"
 Write-Host ""
 
 if (-not (Test-Path $sshKey)) {
@@ -84,6 +86,7 @@ while ($true) {
         "-L", "6380:127.0.0.1:6379",
         "-L", "5433:127.0.0.1:5432",
         "-L", "3101:127.0.0.1:3100",
+        "-L", "7788:127.0.0.1:7788",
         "-N",
         "root@77.42.91.185"
     )

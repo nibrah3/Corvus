@@ -12,3 +12,6 @@ humanizer_mcp/t2_*.png
 humanizer_mcp/smoke_test.cpython*
 *.log
 .env
+profiles/*.json
+*.jsonl
+runtime/

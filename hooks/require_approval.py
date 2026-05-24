@@ -1,10 +1,10 @@
-"""
+﻿"""
 require_approval.py — PreToolUse hook.
 
 Blocks Bash / humanizer / UIA tool calls unless the current job_id has been
 explicitly approved via AskUserQuestion in this session.
 
-Approval is recorded in E:\cb-core\.approval_state.json by the session logic
+Approval is recorded in D:\cb-core\.approval_state.json by the session logic
 when Mike taps [Apply] on a job.
 
 Exit codes:

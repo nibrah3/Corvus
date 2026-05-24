@@ -112,7 +112,7 @@ def upload_video(video_path: str) -> dict:
 
 
 @mcp.tool()
-def analyse_video(file_uri: str, prompt: str, model: str = "gemini-2.0-flash") -> dict:
+def analyse_video(file_uri: str, prompt: str, model: str = "gemini-2.5-flash") -> dict:
     """
     Ask Gemini 2.0 Flash to analyse an uploaded video.
 
@@ -135,7 +135,7 @@ def analyse_video(file_uri: str, prompt: str, model: str = "gemini-2.0-flash") -
 
 
 @mcp.tool()
-def analyse_image(image_path: str, prompt: str, model: str = "gemini-2.0-flash") -> dict:
+def analyse_image(image_path: str, prompt: str, model: str = "gemini-2.5-flash") -> dict:
     """
     Ask Gemini 2.0 Flash about a local image file (inline — no upload needed).
 

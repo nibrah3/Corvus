@@ -1,11 +1,11 @@
-"""
+﻿"""
 vps_mcp — Desktop bridge to VPS pipeline.
 Runs on Desktop at port 8713.
 Connects to VPS via SSH tunnels:
   Redis:    localhost:6380 -> VPS:6379
   Postgres: localhost:5433 -> VPS:5432
   Crawlee:  localhost:3101 -> VPS:3100
-Start tunnels first: powershell E:\\cb-core\\scripts\\vps_tunnel.ps1
+Start tunnels first: powershell D:\\cb-core\\scripts\\vps_tunnel.ps1
 """
 import sys
 import os
@@ -80,6 +80,50 @@ def _redis_lrem(key: str, value: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def _redis_get(key: str) -> str | None:
+    try:
+        reply = _redis_cmd("GET", key)
+        if reply.startswith("$-1"):
+            return None
+        lines = reply.split("\r\n")
+        if lines[0].startswith("$"):
+            return lines[1] if len(lines) > 1 else None
+        return None
+    except Exception:
+        return None
+
+
+def _redis_setex(key: str, seconds: int, value: str) -> bool:
+    try:
+        _redis_cmd("SETEX", key, str(seconds), value)
+        return True
+    except Exception:
+        return False
+
+
+def _redis_keys(pattern: str) -> list[str]:
+    try:
+        reply = _redis_cmd("KEYS", pattern)
+        lines = reply.split("\r\n")
+        results = []
+        i = 0
+        if not lines or not lines[i].startswith("*"):
+            return results
+        count = int(lines[i][1:])
+        i += 1
+        for _ in range(count):
+            if i >= len(lines):
+                break
+            if lines[i].startswith("$"):
+                i += 1
+                if i < len(lines):
+                    results.append(lines[i])
+                i += 1
+        return results
+    except Exception:
+        return []
 
 
 # ── Postgres helpers ───────────────────────────────────────────────────────────
@@ -367,6 +411,78 @@ def get_system_status() -> dict:
         status["postgres"] = f"error: {e}"
 
     return status
+
+
+# ── Node tools ────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def list_nodes() -> dict:
+    """List all execution nodes that sent a heartbeat in the last 90 seconds."""
+    import time
+    keys = [k for k in _redis_keys("corvus:node:*") if k.count(":") == 2]
+    nodes = []
+    now = int(time.time())
+    for key in keys:
+        raw = _redis_get(key)
+        if raw:
+            try:
+                info = json.loads(raw)
+                info["seconds_ago"] = now - info.get("last_seen", now)
+                nodes.append(info)
+            except Exception:
+                nodes.append({"node_id": key.split(":")[-1], "raw": raw})
+    return {"nodes": nodes, "count": len(nodes)}
+
+
+@mcp.tool()
+def register_node(node_id: str, hostname: str, capabilities: str = "full", ttl: int = 90) -> dict:
+    """Register or refresh a node heartbeat. Called by node_agent.py every 30 s."""
+    import time
+    payload = json.dumps({
+        "node_id":      node_id,
+        "hostname":     hostname,
+        "capabilities": capabilities,
+        "last_seen":    int(time.time()),
+    })
+    ok = _redis_setex(f"corvus:node:{node_id}", ttl, payload)
+    return {"ok": ok, "node_id": node_id, "ttl": ttl}
+
+
+@mcp.tool()
+def dispatch_job_to_node(job_id: int, node_id: str) -> dict:
+    """Approve a job and send it to a specific remote execution node's task queue."""
+    try:
+        conn = _pg()
+        cur = conn.cursor(cursor_factory=__import__("psycopg2.extras", fromlist=["RealDictCursor"]).RealDictCursor)
+        cur.execute(
+            "UPDATE jobs SET status='approved', approved_at=NOW() "
+            "WHERE id=%s RETURNING id, url, title, company, profile_id",
+            (job_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return {"error": f"Job {job_id} not found"}
+        payload = json.dumps({
+            "job_id":     job_id,
+            "url":        row["url"],
+            "title":      row.get("title") or "",
+            "company":    row.get("company") or "",
+            "profile_id": row.get("profile_id") or "",
+            "node_id":    node_id,
+        })
+        queue_key = f"corvus:node:{node_id}:tasks"
+        _redis_rpush(queue_key, payload)
+        # Remove from pending approvals
+        pending = _redis_lrange("corvus:pending_approvals", 0, -1)
+        for item in pending:
+            try:
+                if json.loads(item).get("job_id") == job_id:
+                    _redis_lrem("corvus:pending_approvals", item)
+            except Exception:
+                pass
+        return {"ok": True, "job_id": job_id, "node_id": node_id, "queue": queue_key}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 if __name__ == "__main__":

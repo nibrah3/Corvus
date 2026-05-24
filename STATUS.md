@@ -1,4 +1,4 @@
-# CareerBridge — Project Status & Blockers
+﻿# Corvus_Careebridge — Project Status & Blockers
 
 *Last updated: 2026-05-21*
 
@@ -51,7 +51,7 @@ powershell -File D:\cb-core\scripts\register_startup.ps1
 ## Setup Steps Completed (2026-05-21)
 
 1. **Cloned repo** to `D:\cb-core` (E: drive is CD-ROM, not writable)
-2. **Patched all `E:\cb-core` path references** → `D:\cb-core` across 11 files
+2. **Patched all `D:\cb-core` path references** → `D:\cb-core` across 11 files
 3. **Installed Python 3.14.0** to `C:\Python314`
 4. **Tightened Python directory permissions** (`C:\Python314`):
    - Removed `NT AUTHORITY\Authenticated Users: Modify` (security risk)
@@ -166,4 +166,4 @@ powershell -File D:\cb-core\scripts\register_startup.ps1
 - All 9 MCP servers start and respond correctly
 - Python 3.14.0 installed and accessible at `C:\Python314\python.exe`
 - `start_mcps.ps1` correctly detects already-running servers and skips them
-- Path references fully migrated from `E:\cb-core` → `D:\cb-core`
+- Path references fully migrated from `D:\cb-core` → `D:\cb-core`

@@ -13,6 +13,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from _minmcp import MinMCP
 
 STORE_PATH = os.environ.get("CB_MEMORY_PATH", r"D:\cb-core\memory_store.json")
+MAX_OBSERVATIONS_PER_ENTITY = 500   # keep the most recent N observations per entity
+MAX_RELATIONS = 2000                 # hard cap; oldest entries dropped when exceeded
 mcp = MinMCP("memory")
 
 _lock = threading.Lock()
@@ -54,13 +56,15 @@ def create_entities(entities: list) -> dict:
             if not name:
                 continue
             if name in data["entities"]:
-                data["entities"][name]["observations"].extend(e.get("observations", []))
+                obs = data["entities"][name]["observations"] + e.get("observations", [])
+                data["entities"][name]["observations"] = obs[-MAX_OBSERVATIONS_PER_ENTITY:]
                 updated += 1
             else:
+                new_obs = e.get("observations", [])[-MAX_OBSERVATIONS_PER_ENTITY:]
                 data["entities"][name] = {
                     "name": name,
                     "entityType": e.get("entityType", ""),
-                    "observations": e.get("observations", []),
+                    "observations": new_obs,
                 }
                 created += 1
         _save(data)
@@ -83,7 +87,8 @@ def add_observations(entity_name: str, observations: list) -> dict:
         data = _load()
         if entity_name not in data["entities"]:
             return {"ok": False, "error": f"Entity '{entity_name}' not found"}
-        data["entities"][entity_name]["observations"].extend(observations)
+        obs = data["entities"][entity_name]["observations"] + observations
+        data["entities"][entity_name]["observations"] = obs[-MAX_OBSERVATIONS_PER_ENTITY:]
         total = len(data["entities"][entity_name]["observations"])
         _save(data)
     return {"ok": True, "total_observations": total}
@@ -109,6 +114,8 @@ def create_relations(relations: list) -> dict:
             if r not in data["relations"]:
                 data["relations"].append(r)
                 created += 1
+        if len(data["relations"]) > MAX_RELATIONS:
+            data["relations"] = data["relations"][-MAX_RELATIONS:]
         _save(data)
     return {"created": created}
 

@@ -1,4 +1,4 @@
-"""
+﻿"""
 serper_graph_expand.py — Expand ATS probe coverage via Serper.
 
 Reads distinct company names from VPS postgres (jobs table), searches Serper
@@ -9,9 +9,9 @@ Tracks already-explored companies in postgres (probe_log table) to avoid
 duplicate Serper spend.
 
 Requirements:
-  - VPS SSH tunnels active: run powershell E:\\cb-core\\scripts\\vps_tunnel.ps1
+  - VPS SSH tunnels active: run powershell D:\\cb-core\\scripts\\vps_tunnel.ps1
     (Redis:6380, Postgres:5433, Crawlee:3101)
-  - E:\\cb-core\\.env with SERPER_API_KEY
+  - D:\\cb-core\\.env with SERPER_API_KEY
 
 Usage:
   python scripts/serper_graph_expand.py [--limit 50] [--dry-run]
@@ -46,9 +46,12 @@ def _load_env() -> None:
 _load_env()
 
 SERPER_KEY   = os.environ.get("SERPER_API_KEY", "")
-PG_DSN       = os.environ.get("VPS_PG_DSN",
-               "postgresql://corvus:corvus-local-password@127.0.0.1:5433/careerbridge")
-CRAWLEE_URL  = os.environ.get("VPS_CRAWLEE_URL", "http://127.0.0.1:3101")
+# On desktop: uses tunnel ports (5433/3101). On VPS: uses POSTGRES_DSN / direct 3100.
+PG_DSN       = (os.environ.get("POSTGRES_DSN") or
+                os.environ.get("VPS_PG_DSN",
+                "postgresql://corvus:corvus-local-password@127.0.0.1:5433/careerbridge"))
+CRAWLEE_URL  = (os.environ.get("CRAWLEE_URL") or
+                os.environ.get("VPS_CRAWLEE_URL", "http://127.0.0.1:3101"))
 
 logging.basicConfig(
     level=logging.INFO,
@@ -118,7 +121,7 @@ def _pg_connect():
         raise RuntimeError("psycopg2 not installed: pip install psycopg2-binary")
 
 
-def _ensure_probe_log(conn) -> None:
+def _ensure_tables(conn) -> None:
     with conn.cursor() as cur:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS probe_log (
@@ -127,7 +130,30 @@ def _ensure_probe_log(conn) -> None:
                 searched_at TIMESTAMP DEFAULT NOW()
             )
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS discovered_platforms (
+                id                   SERIAL PRIMARY KEY,
+                company              TEXT NOT NULL,
+                careers_url          TEXT NOT NULL UNIQUE,
+                source               TEXT,
+                category             TEXT,
+                ats_type             TEXT DEFAULT 'firecrawl',
+                ats_slug             TEXT,
+                check_interval_hours INT DEFAULT 24,
+                last_checked_at      TIMESTAMP,
+                last_found_jobs      INT DEFAULT 0,
+                consecutive_empty    INT DEFAULT 0,
+                is_active            BOOLEAN DEFAULT TRUE,
+                about                TEXT,
+                discovered_at        TIMESTAMP DEFAULT NOW()
+            )
+        """)
     conn.commit()
+
+
+# Keep old name as alias so nothing else breaks
+def _ensure_probe_log(conn) -> None:
+    _ensure_tables(conn)
 
 
 def _get_unexplored_companies(conn, limit: int) -> list[str]:
@@ -150,6 +176,19 @@ def _record_probe(conn, company: str, careers_url: Optional[str]) -> None:
             ON CONFLICT (company) DO UPDATE
               SET careers_url = EXCLUDED.careers_url,
                   searched_at = NOW()
+        """, (company, careers_url))
+    conn.commit()
+
+
+def _save_discovered_platform(conn, company: str, careers_url: str) -> None:
+    """Register the platform permanently so enrichment picks it up on every cycle."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO discovered_platforms (company, careers_url, source)
+            VALUES (%s, %s, 'serper_expand')
+            ON CONFLICT (careers_url) DO UPDATE
+              SET company = EXCLUDED.company,
+                  source  = COALESCE(discovered_platforms.source, EXCLUDED.source)
         """, (company, careers_url))
     conn.commit()
 
@@ -176,7 +215,7 @@ def _trigger_career_scrape(url: str) -> bool:
 
 def run(limit: int = 50, dry_run: bool = False) -> None:
     conn = _pg_connect()
-    _ensure_probe_log(conn)
+    _ensure_tables(conn)
 
     companies = _get_unexplored_companies(conn, limit)
     log.info("Found %d unexplored companies (limit=%d)", len(companies), limit)
@@ -194,6 +233,7 @@ def run(limit: int = 50, dry_run: bool = False) -> None:
                 found += 1
                 if not dry_run:
                     _record_probe(conn, company, url)
+                    _save_discovered_platform(conn, company, url)
                     _trigger_career_scrape(url)
             else:
                 log.debug("[SKIP]  %-40s (no careers URL in results)", company)
@@ -221,7 +261,7 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     if not SERPER_KEY:
-        log.error("SERPER_API_KEY not set. Add it to E:\\cb-core\\.env")
+        log.error("SERPER_API_KEY not set. Add it to D:\\cb-core\\.env")
         sys.exit(1)
 
     run(limit=args.limit, dry_run=args.dry_run)

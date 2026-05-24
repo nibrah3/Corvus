@@ -26,18 +26,18 @@ from ._distributions import sample_pre_click, sample_hold, sample_mouse_tremor
 _backend = "uninitialized"
 _pynput_mouse = None
 _Button = None
-_icp = None
-_icp_mouse = None
+_icp_mod = None   # interception module reference
 
 
 def _ensure_backend() -> None:
-    global _backend, _pynput_mouse, _Button, _icp, _icp_mouse
+    global _backend, _pynput_mouse, _Button, _icp_mod
     if _backend != "uninitialized":
         return
     try:
-        import interception as _icp_mod
-        _icp = _icp_mod.Interception()
-        _icp_mouse = _icp_mod.MouseStroke()
+        import interception as _ic
+        # Verify driver is actually installed by probing a safe call
+        _ic.auto_capture_devices()
+        _icp_mod = _ic
         _backend = "interception"
         return
     except Exception:
@@ -57,7 +57,7 @@ def _ensure_backend() -> None:
 # ── WindMouse path generator ──────────────────────────────────────────────────
 
 try:
-    from windmouse import generate_wind_mouse_input as _windmouse_raw
+    from windmouse.core import wind_mouse as _windmouse_gen
     _HAS_WINDMOUSE = True
 except ImportError:
     _HAS_WINDMOUSE = False
@@ -70,13 +70,18 @@ def _windmouse_path(
 ) -> list[Tuple[int, int]]:
     """
     Generate a WindMouse path from (x0,y0) to (x1,y1).
-    Falls back to simple bezier if windmouse not installed.
+    Falls back to cubic Bézier if windmouse not installed.
     """
     if _HAS_WINDMOUSE:
         try:
-            raw = _windmouse_raw(x0, y0, x1, y1, G_0=gravity, W_0=wind,
-                                  M_0=15, D_0=12)
-            return [(int(x), int(y)) for x, y in raw]
+            return [(int(x), int(y))
+                    for x, y in _windmouse_gen(
+                        x0, y0, x1, y1,
+                        gravity_magnitude=gravity,
+                        wind_magnitude=wind,
+                        max_step=15,
+                        damped_distance=12,
+                    )]
         except Exception:
             pass
     # Fallback: cubic bezier with randomised control points
@@ -116,12 +121,7 @@ def _move_to_absolute(x: int, y: int) -> None:
     """Move cursor to absolute screen position (x, y)."""
     _ensure_backend()
     if _backend == "interception":
-        # Interception uses relative movement — compute delta from current position
-        cx, cy = _get_position()
-        _icp_mouse.x = x - cx
-        _icp_mouse.y = y - cy
-        _icp_mouse.flags = interception.MouseFlag.MOVE_RELATIVE
-        _icp.send(_icp.get_foreground_device(interception.DeviceType.MOUSE), _icp_mouse)
+        _icp_mod.move_to(x, y)
     elif _backend == "pynput":
         _pynput_mouse.position = (x, y)
 
@@ -130,22 +130,24 @@ def _move_relative(dx: int, dy: int) -> None:
     """Move cursor by (dx, dy) pixels — matches real HID mouse reporting."""
     _ensure_backend()
     if _backend == "interception":
-        _icp_mouse.x = dx
-        _icp_mouse.y = dy
-        _icp_mouse.flags = interception.MouseFlag.MOVE_RELATIVE
-        _icp.send(_icp.get_foreground_device(interception.DeviceType.MOUSE), _icp_mouse)
+        _icp_mod.move_relative(dx, dy)
     elif _backend == "pynput":
         _pynput_mouse.move(dx, dy)
 
 
 def _get_position() -> Tuple[int, int]:
     _ensure_backend()
+    if _backend == "interception":
+        try:
+            return _icp_mod.mouse_position()
+        except Exception:
+            pass
     if _backend == "pynput":
         pos = _pynput_mouse.position
         return (int(pos[0]), int(pos[1]))
-    # For interception, read via win32 as fallback
+    # Fallback: win32 GetCursorPos
     try:
-        import ctypes
+        import ctypes, ctypes.wintypes
         pt = ctypes.wintypes.POINT()
         ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
         return (pt.x, pt.y)
@@ -155,32 +157,20 @@ def _get_position() -> Tuple[int, int]:
 
 def _mouse_down(button: str = "left") -> None:
     _ensure_backend()
-    if _backend == "pynput":
+    if _backend == "interception":
+        _icp_mod.mouse_down(button)
+    elif _backend == "pynput":
         btn = _Button.left if button == "left" else _Button.right
         _pynput_mouse.press(btn)
-    elif _backend == "interception":
-        _icp_mouse.state = (
-            interception.MouseState.LEFT_BUTTON_DOWN
-            if button == "left"
-            else interception.MouseState.RIGHT_BUTTON_DOWN
-        )
-        _icp_mouse.flags = interception.MouseFlag.MOVE_NOCOALESCE
-        _icp.send(_icp.get_foreground_device(interception.DeviceType.MOUSE), _icp_mouse)
 
 
 def _mouse_up(button: str = "left") -> None:
     _ensure_backend()
-    if _backend == "pynput":
+    if _backend == "interception":
+        _icp_mod.mouse_up(button)
+    elif _backend == "pynput":
         btn = _Button.left if button == "left" else _Button.right
         _pynput_mouse.release(btn)
-    elif _backend == "interception":
-        _icp_mouse.state = (
-            interception.MouseState.LEFT_BUTTON_UP
-            if button == "left"
-            else interception.MouseState.RIGHT_BUTTON_UP
-        )
-        _icp_mouse.flags = interception.MouseFlag.MOVE_NOCOALESCE
-        _icp.send(_icp.get_foreground_device(interception.DeviceType.MOUSE), _icp_mouse)
 
 
 # ── High-level actions ────────────────────────────────────────────────────────

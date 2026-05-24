@@ -18,7 +18,7 @@ import random
 import time
 from typing import Callable, Optional
 
-import pyautogui
+import pyautogui  # retained for size() only; click/scroll delegated to humanizer_mcp
 
 from .capture import CaptureFrame, CaptureSession
 from .errors import CaptureError, ErrorCode, PerceptionError, StateError
@@ -351,6 +351,13 @@ class AssessmentOrchestrator:
         Returns original bbox if already in view, updated bbox after scroll,
         or None if re-OCR couldn't locate the element.
         """
+        import sys, os as _os
+        _cb = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), ".."))
+        if _cb not in sys.path:
+            sys.path.insert(0, _cb)
+        from humanizer_mcp._scroll import scroll as _hum_scroll
+        from humanizer_mcp._profile import BehaviorProfile
+
         _, screen_h = pyautogui.size()
         elem_bottom = bbox.y + bbox.h
         elem_top    = bbox.y
@@ -361,22 +368,25 @@ class AssessmentOrchestrator:
         if not needs_scroll_down and not needs_scroll_up:
             return bbox  # already in view
 
-        # Move mouse to window centre before scrolling so the scroll lands in-page
+        # Scroll position: window centre
         try:
             frame = session.grab(self._window_title)
             win   = frame.window_bbox
-            pyautogui.moveTo(win.x + win.w // 2, win.y + win.h // 2, duration=0.1)
+            scroll_x = win.x + win.w // 2
+            scroll_y = win.y + win.h // 2
         except Exception:
-            pass
+            scroll_x, scroll_y = 800, 400  # safe fallback
 
         if needs_scroll_down:
             scroll_px     = elem_bottom - (screen_h - _SCROLL_MARGIN_PX)
             scroll_clicks = max(1, round(scroll_px / _PX_PER_SCROLL_CLICK))
-            pyautogui.scroll(-scroll_clicks)
+            _hum_scroll(scroll_x, scroll_y, "down", scroll_clicks,
+                        profile=BehaviorProfile.default())
         else:
             scroll_px     = _SCROLL_MARGIN_PX - elem_top
             scroll_clicks = max(1, round(scroll_px / _PX_PER_SCROLL_CLICK))
-            pyautogui.scroll(scroll_clicks)
+            _hum_scroll(scroll_x, scroll_y, "up", scroll_clicks,
+                        profile=BehaviorProfile.default())
 
         print(f"[execute] scrolled {'down' if needs_scroll_down else 'up'} {scroll_clicks} clicks to reach '{target_text[:40]}'", flush=True)
         time.sleep(0.6)  # wait for scroll animation to settle

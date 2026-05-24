@@ -7,6 +7,7 @@
 #   ex = CDPExecutor()
 #   ex.connect()              # auto-discover port (tries 9222 first)
 #   ex.connect(port=9222)     # or supply port directly
+#   ex.connect_ws("ws://...") # connect directly to known ws:// URL (IXBrowser API)
 #   tree = ex.get_axtree()    # [{nodeId, role, name, properties, childIds}, ...]
 #   ex.click_selector("#id")  # CDP click by CSS selector
 #   ex.click_js(expr)         # evaluate JS expression that returns an element
@@ -48,22 +49,55 @@ _RECV_TIMEOUT     = 15.0   # seconds to wait for a CDP response
 _IX_NAMES         = {"ixbrowser.exe", "ixbrowser", "chrome.exe", "chromium.exe",
                      "google chrome.exe"}
 
-# Minimal stealth bundle — confirmed CONSISTENT on Pixelscan with no masking detection.
+# Baseline stealth bundle — injected via addScriptToEvaluateOnNewDocument on every connect.
 # Only patches that ixBrowser cannot handle natively at the C++ level.
-# DO NOT add: timezone override, languages defineProperty, permissions.query replacement,
-# outerWidth/Height, or userAgentData overrides — all cause Pixelscan masking detection.
+# DO NOT add: timezone override, languages defineProperty, outerWidth/Height overrides,
+# or userAgentData overrides — those cause Pixelscan masking detection.
 _STEALTH_JS = r"""
 (function() {
+    // Remove automation globals
     Object.keys(window).filter(function(k) {
-        return k.startsWith('cdc_') || k.includes('__puppeteer') || k.includes('__selenium');
+        return k.startsWith('cdc_') || k.includes('__puppeteer') || k.includes('__selenium')
+            || k.includes('__webdriver') || k.includes('__driver');
     }).forEach(function(k) { try { delete window[k]; } catch(e) {} });
+
+    // window.chrome must exist with loadTimes, csi, app, runtime
     if (!window.chrome) window.chrome = {};
     if (!window.chrome.runtime) window.chrome.runtime = {
         id: undefined,
         connect: function() {},
         sendMessage: function() {},
-        onMessage: { addListener: function() {}, removeListener: function() {} }
+        onMessage: { addListener: function() {}, removeListener: function() {} },
+        onConnect: { addListener: function() {}, removeListener: function() {} },
     };
+
+    // Notification.permission should be 'default', not 'denied'
+    // Headless/automation Chrome auto-denies; detectors (Sannysoft, Pixelscan) check this.
+    try {
+        if (typeof Notification !== 'undefined' && Notification.permission !== 'default') {
+            Object.defineProperty(Notification, 'permission', {
+                get: function() { return 'default'; },
+                configurable: true,
+            });
+        }
+    } catch(e) {}
+
+    // Permissions.query — return 'prompt' for notifications/push
+    // State values must be "granted" | "denied" | "prompt" (NOT "default")
+    try {
+        var _origQuery = window.Permissions && window.Permissions.prototype.query;
+        if (_origQuery) {
+            var _overrides = {notifications:'prompt', push:'prompt', geolocation:'prompt'};
+            window.Permissions.prototype.query = function(d) {
+                var state = _overrides[(d||{}).name];
+                if (state) return Promise.resolve(
+                    {state: state, onchange: null,
+                     addEventListener: function(){}, removeEventListener: function(){}}
+                );
+                return _origQuery.call(this, d);
+            };
+        }
+    } catch(e) {}
 })();
 """
 
@@ -177,7 +211,11 @@ class CDPExecutor:
             on_error=self._on_error,
             on_close=self._on_close,
         )
-        thread = threading.Thread(target=self._ws.run_forever, daemon=True)
+        # suppress_origin: Chrome 111+ rejects connections whose Origin header
+        # includes a port number. Suppressing it bypasses the check entirely.
+        thread = threading.Thread(
+            target=lambda: self._ws.run_forever(suppress_origin=True), daemon=True
+        )
         thread.start()
 
         # Wait for confirmed handshake (up to 8 seconds)
@@ -193,6 +231,50 @@ class CDPExecutor:
         self._connected = True
 
         return self._port
+
+    def connect_ws(self, ws_url: str) -> None:
+        """
+        Connect to a known ws:// URL from the IXBrowser API.
+
+        IXBrowser returns a browser-level URL (ws://.../devtools/browser/UUID).
+        We detect this and fall back to port-based page discovery (/json) so we
+        always land on a page session rather than the browser root.
+        """
+        import re
+        try:
+            import websocket
+        except ImportError:
+            raise CDPError("websocket-client not installed — run: pip install websocket-client")
+
+        m = re.search(r":(\d+)/", ws_url)
+        self._port = int(m.group(1)) if m else 0
+
+        # Browser-level URL → use port-based page discovery instead
+        if "/devtools/browser/" in ws_url and self._port:
+            self.connect(port=self._port)
+            return
+
+        self._ws_ready.clear()
+        self._ws = websocket.WebSocketApp(
+            ws_url,
+            on_open=self._on_open,
+            on_message=self._on_message,
+            on_error=self._on_error,
+            on_close=self._on_close,
+        )
+        threading.Thread(
+            target=lambda: self._ws.run_forever(suppress_origin=True), daemon=True
+        ).start()
+
+        if not self._ws_ready.wait(timeout=8.0):
+            raise CDPError(f"WebSocket handshake timed out for {ws_url}")
+        time.sleep(0.1)
+
+        self._send("DOM.enable")
+        self._send("Accessibility.enable")
+        self._send("Page.enable")
+        self._send("Page.addScriptToEvaluateOnNewDocument", {"source": _STEALTH_JS})
+        self._connected = True
 
     def disconnect(self) -> None:
         if self._ws is not None:
@@ -686,6 +768,23 @@ class CDPExecutor:
             "expression":            expression,
             "returnByValue":         True,
             "awaitPromise":          False,
+            "userGesture":           True,
+        })
+        obj = result.get("result", {})
+        if obj.get("type") == "object" and obj.get("value") is not None:
+            return obj["value"]
+        return obj.get("value")
+
+    def eval_js_async(self, expression: str) -> Any:
+        """Evaluate a JS expression that returns a Promise, awaiting its resolution.
+
+        Uses the same _RECV_TIMEOUT as other CDP calls. The Promise itself should
+        resolve within that window — include a JS-side setTimeout guard if needed.
+        """
+        result = self._send("Runtime.evaluate", {
+            "expression":            expression,
+            "returnByValue":         True,
+            "awaitPromise":          True,
             "userGesture":           True,
         })
         obj = result.get("result", {})

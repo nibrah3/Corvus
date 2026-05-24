@@ -200,5 +200,9 @@ def _call_llm(prompt: str) -> dict:
         timeout=30,
     )
     r.raise_for_status()
-    content = r.json()["choices"][0]["message"]["content"]
+    content = r.json()["choices"][0]["message"]["content"].strip()
+    # Strip markdown code fences if present (some models wrap JSON in ```json...```)
+    if content.startswith("```"):
+        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+        content = content.rsplit("```", 1)[0].strip()
     return json.loads(content)

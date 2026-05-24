@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import sys
 import time
 from io import BytesIO
 from typing import Optional
@@ -19,6 +20,11 @@ import numpy as np
 
 _MODEL    = "google/gemini-2.5-flash"
 _BASE_URL = "https://openrouter.ai/api/v1"
+
+# Ensure D:\cb-core is importable for answer_mcp sub-packages
+_CB_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _CB_ROOT not in sys.path:
+    sys.path.insert(0, _CB_ROOT)
 
 
 def _client():
@@ -57,12 +63,37 @@ _SCHEMA = """{
 }"""
 
 
+def _ensure_persona(profile_id: str) -> str:
+    """Return persona_prompt for profile, auto-generating if missing."""
+    from answer_mcp._persona import get_persona_prompt, generate_persona
+    prompt = get_persona_prompt(profile_id)
+    if not prompt:
+        print(f"[gemini] auto-generating persona for profile {profile_id!r}", flush=True)
+        data = generate_persona(profile_id, {})
+        prompt = data["persona_prompt"]
+    return prompt
+
+
+def _apply_persona(text: str, question_context: str, profile_id: str) -> str:
+    """Rewrite text in the profile's locked persona voice."""
+    from answer_mcp._humanize import humanize
+    persona_prompt = _ensure_persona(profile_id)
+    return humanize(
+        canonical_answer=text,
+        question=question_context or "professional assessment question",
+        persona_prompt=persona_prompt,
+        profile_id=profile_id,
+        target_words=len(text.split()) if text else None,
+    )
+
+
 def decide(
     screenshot_bgra: np.ndarray,
     win_x: int,
     win_y: int,
     personality: Optional[dict] = None,
     mode: str = "comprehension",
+    profile_id: Optional[str] = None,
 ) -> dict:
     """
     Send a screenshot to Gemini Flash and get the next action.
@@ -142,6 +173,17 @@ Coordinates are pixel positions within this screenshot image (top-left = 0,0).""
 
     action = json.loads(raw)
     action["_latency_ms"] = latency_ms
+
+    # Route type-action text through persona humanizer if profile_id is set.
+    # Factual content from Gemini is preserved as canonical; only voice/style changes.
+    if profile_id and action.get("action") == "type" and action.get("text"):
+        canonical = action["text"]
+        q_context = (action.get("target") or "") + " — " + (action.get("reasoning") or "")
+        try:
+            action["text"] = _apply_persona(canonical, q_context.strip(" —"), profile_id)
+            print(f"[gemini] persona applied for profile {profile_id!r}", flush=True)
+        except Exception as _pe:
+            print(f"[gemini] persona humanize failed ({_pe}) — using raw text", flush=True)
 
     print(
         f"[gemini] {latency_ms}ms | action={action.get('action')} "

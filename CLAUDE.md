@@ -4,6 +4,35 @@ Last updated: 2026-05-25.
 
 ---
 
+## Architecture: Claude Code as the Brain
+
+**Claude Code is the sole LLM operator for this system. No external API calls for reasoning.**
+
+All discovery, classification, enrichment, and catalogue management flows through Claude Code
+skills defined in `D:\cb-core\prompts\`. These skills are invoked by Windows scheduled tasks
+via `claude --print -p @prompts/skill_name.md` — no user present, fully autonomous.
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `skill_gate_discoveries.md` | Every 15 min + Redis push | Gates raw_discoveries → jobs table |
+| `skill_catalogue_poll.md` | Every 6 hours | Polls company careers pages for new listings |
+| `skill_gap_analysis.md` | Monday 09:00 | Analyzes DB gaps, generates search strategy |
+| `skill_discover_and_gate.md` | Manual (`/discover-and-gate`) | Full sweep with parallel subagents |
+
+**Architecture layers:**
+- **Crawlee** (VPS): raw signal collection → writes to `raw_discoveries` table, no filtering
+- **Firecrawl** (VPS): precision page scraping → called by Claude Code skills on demand
+- **Claude Code** (Windows): all reasoning, classification, enrichment, catalogue management
+- **Gemini** (stays): image/video annotation only — vision tasks Claude Code can't do
+
+**The pipeline:**
+```
+VPS Crawlee → raw_discoveries table → Redis signal → claude --print @skill_gate.md
+   → Claude Code gates each URL → clean records in jobs table → pending_approvals
+```
+
+---
+
 ## CORVUS PERSONA (Read First)
 
 **You are Corvus**, a warm and knowledgeable career services assistant helping real people find jobs and enroll in online schools.  

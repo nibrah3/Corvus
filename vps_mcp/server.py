@@ -602,5 +602,194 @@ def dispatch_job_to_node(job_id: int, node_id: str) -> dict:
         return {"error": str(e)}
 
 
+# ── Raw Discovery tools (Claude Code gate pipeline) ──────────────────────────
+
+@mcp.tool()
+def get_raw_discoveries(limit: int = 50) -> dict:
+    """
+    Return unprocessed raw discoveries for Claude Code to gate.
+    These are URLs collected by Crawlee/Firecrawl before any filtering.
+    Claude Code reads each one, decides keep/block/job_type, then calls
+    upsert_job() or mark_raw_blocked() for each.
+    """
+    try:
+        conn = _pg()
+        cur = conn.cursor(cursor_factory=__import__("psycopg2.extras", fromlist=["RealDictCursor"]).RealDictCursor)
+        cur.execute(
+            """
+            SELECT id, url, title, company, source, raw_content, discovered_at
+            FROM raw_discoveries
+            WHERE processed = FALSE AND blocked = FALSE
+            ORDER BY discovered_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = [_row_to_dict(r) for r in cur.fetchall()]
+        return {"discoveries": rows, "count": len(rows)}
+    except Exception as e:
+        return {"error": str(e), "discoveries": []}
+
+
+@mcp.tool()
+def mark_raw_blocked(discovery_id: int, reason: str) -> dict:
+    """Mark a raw discovery as blocked — not a gig job. Removes it from the gate queue."""
+    try:
+        conn = _pg()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE raw_discoveries SET processed=TRUE, blocked=TRUE, block_reason=%s WHERE id=%s",
+            (reason, discovery_id),
+        )
+        return {"ok": True, "id": discovery_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def mark_raw_processed(discovery_id: int) -> dict:
+    """Mark a raw discovery as processed (kept as a job). Call after upsert_job()."""
+    try:
+        conn = _pg()
+        cur = conn.cursor()
+        cur.execute("UPDATE raw_discoveries SET processed=TRUE WHERE id=%s", (discovery_id,))
+        return {"ok": True, "id": discovery_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def get_due_catalogue_companies(limit: int = 20) -> dict:
+    """
+    Return discovered_platforms companies whose check_interval has elapsed.
+    Claude Code calls Firecrawl on each, reads for new listings, then
+    calls upsert_job() for any new ones found and update_catalogue_tier() to adjust.
+    """
+    try:
+        conn = _pg()
+        cur = conn.cursor(cursor_factory=__import__("psycopg2.extras", fromlist=["RealDictCursor"]).RealDictCursor)
+        cur.execute(
+            """
+            SELECT id, company, careers_url, category, tier,
+                   check_interval_hours, last_checked_at, last_found_jobs,
+                   consecutive_empty, jobs_found_30d
+            FROM discovered_platforms
+            WHERE is_active = TRUE
+              AND tier IS NOT NULL
+              AND (
+                last_checked_at IS NULL
+                OR last_checked_at < NOW() - (check_interval_hours || ' hours')::INTERVAL
+              )
+            ORDER BY tier ASC, last_checked_at ASC NULLS FIRST
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = [_row_to_dict(r) for r in cur.fetchall()]
+        return {"companies": rows, "count": len(rows)}
+    except Exception as e:
+        return {"error": str(e), "companies": []}
+
+
+@mcp.tool()
+def update_catalogue_tier(
+    platform_id: int,
+    tier: int,
+    reason: str = "",
+    jobs_found: int = 0,
+) -> dict:
+    """
+    Update a platform's monitoring tier after Claude Code polls it.
+    tier 1 = check every 12h (high signal)
+    tier 2 = check every 48h (moderate)
+    tier 3 = check weekly (low signal)
+    tier 0 = archive (no longer active)
+    """
+    try:
+        conn = _pg()
+        cur = conn.cursor()
+        interval_map = {0: 8760, 1: 12, 2: 48, 3: 168}
+        new_interval = interval_map.get(tier, 48)
+        cur.execute(
+            """
+            UPDATE discovered_platforms
+            SET tier = %s,
+                tier_reason = %s,
+                check_interval_hours = %s,
+                last_found_jobs = %s,
+                last_checked_at = NOW(),
+                last_promoted_at = CASE WHEN tier != %s THEN NOW() ELSE last_promoted_at END
+            WHERE id = %s
+            """,
+            (tier, reason, new_interval, jobs_found, tier, platform_id),
+        )
+        return {"ok": True, "platform_id": platform_id, "tier": tier, "interval_h": new_interval}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def get_gap_report() -> dict:
+    """
+    Return a gap analysis report for Claude Code's weekly strategy skill.
+    Shows job_type distribution, top sources, empty categories, and
+    what's underrepresented so Claude Code can direct the next discovery cycle.
+    """
+    try:
+        conn = _pg()
+        cur = conn.cursor(cursor_factory=__import__("psycopg2.extras", fromlist=["RealDictCursor"]).RealDictCursor)
+
+        cur.execute("""
+            SELECT job_type, COUNT(*) n
+            FROM jobs WHERE job_type IS NOT NULL AND status != 'blocked'
+            GROUP BY job_type ORDER BY n DESC
+        """)
+        by_type = {r["job_type"]: r["n"] for r in cur.fetchall()}
+
+        cur.execute("""
+            SELECT source, COUNT(*) n FROM jobs
+            WHERE status = 'pending' AND job_type IS NOT NULL
+            GROUP BY source ORDER BY n DESC LIMIT 15
+        """)
+        by_source = {r["source"]: r["n"] for r in cur.fetchall()}
+
+        cur.execute("SELECT COUNT(*) n FROM jobs WHERE status='blocked'")
+        blocked = cur.fetchone()["n"]
+
+        cur.execute("SELECT COUNT(*) n FROM raw_discoveries WHERE processed=FALSE AND blocked=FALSE")
+        raw_pending = cur.fetchone()["n"]
+
+        cur.execute("""
+            SELECT tier, COUNT(*) n FROM discovered_platforms
+            WHERE is_active=TRUE GROUP BY tier ORDER BY tier
+        """)
+        catalogue_tiers = {str(r["tier"] or "null"): r["n"] for r in cur.fetchall()}
+
+        cur.execute("""
+            SELECT COUNT(*) n FROM discovered_platforms
+            WHERE is_active=TRUE AND last_found_jobs=0 AND consecutive_empty >= 3
+        """)
+        dead_platforms = cur.fetchone()["n"]
+
+        all_types = {
+            "ai_training", "data_annotation", "search_rating", "transcription",
+            "translation", "content_writing", "social_media", "virtual_assistant",
+            "customer_support", "microtask", "tutoring", "testing", "moderation", "gpt",
+        }
+        missing = sorted(all_types - set(by_type.keys()))
+
+        return {
+            "job_type_distribution": by_type,
+            "missing_types": missing,
+            "top_sources": by_source,
+            "blocked_total": blocked,
+            "raw_pending_gate": raw_pending,
+            "catalogue_tiers": catalogue_tiers,
+            "dead_platforms_count": dead_platforms,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 if __name__ == "__main__":
     mcp.run()

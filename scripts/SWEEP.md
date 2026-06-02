@@ -53,6 +53,9 @@ If tunnel is down the CareerBridge-Tunnel task auto-reconnects, but alert Telegr
 | \CareerBridge_SchoolReport_6h | Ready or Running     |
 | \CareerBridge_Sweep           | Ready or Running     |
 | \CareerBridge_Gate            | Ready or Running     |
+| \CareerBridge_Catalogue       | Ready or Running     |
+| \CareerBridge_WeeklyGap       | Ready or Running     |
+| \CareerBridge-RawListener     | Running              |
 
 Check: `schtasks /query /fo LIST /nh /tn "{task}" 2>&1`
 Auto-fix stopped task: `schtasks /run /tn "{task}"`

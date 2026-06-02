@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 """
-enrich_jobs.py — Job enrichment pipeline.
+enrich_jobs.py — Legacy job enrichment pipeline (KEPT for backward compat).
 
-For every unenriched job:
-  1. Firecrawl the platform URL (LinkedIn, WorkSpark, etc.) to get listing content
-  2. Extract the official employer URL — the company's own careers page or ATS listing
-  3. Firecrawl the official URL for the authoritative job description
-  4. Update the DB: official_url, official_description, enriched=True
-  5. If no official URL can be found: mark quality_issue='no_official_url' (still enriched=True
-     so we don't retry endlessly — operator sees the warning in the job card)
+ARCHITECTURE NOTE: New discoveries flow through raw_discoveries → Claude Code gate
+(skill_gate_discoveries.md, called via `claude --print` every 15 min). This script
+is now only used for:
+  - _bulk_block_obvious(): instant SQL-based blocking of known non-jobs
+  - Firecrawl-based official URL resolution for jobs that bypassed the gate
 
-After enrichment, generate a batch PDF and send to all Telegram users.
-
-Usage:
-  python enrich_jobs.py             # run once, block until done
-  python enrich_jobs.py --background # run, then generate PDF + broadcast
+The LLM gate (_claude_gate) has been removed. Claude Code is the gate now.
+Use CareerBridge_Gate task (claude --print @skill_gate_discoveries.md) for new gating.
 """
 from __future__ import annotations
 

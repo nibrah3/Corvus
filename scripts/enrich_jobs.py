@@ -386,6 +386,45 @@ def _block_job(conn, job_id: int, block_reason: str) -> None:
     conn.commit()
 
 
+# ── Bulk-block obvious non-jobs (no LLM needed) ───────────────────────────────
+# Runs at the start of every enrichment cycle before the LLM gate.
+# These patterns are 100% certain non-gig-work — blocking via SQL is
+# cheaper and faster than spending an API call on each one.
+
+_BULK_RULES = [
+    ("source = 'us_schools'",                                          "school_page_in_jobs_table"),
+    ("url LIKE '%%news.ycombinator.com%%'",                            "hn_comment_not_job"),
+    ("url LIKE '%%reddit.com%%' AND source = 'reddit'",               "reddit_post_not_job"),
+    ("url LIKE '%%indeed.com%%' AND (title ILIKE 'apply at%%' OR title ILIKE 'open enrollment%%')",
+                                                                       "school_enrollment_page"),
+    ("url LIKE '%%ycombinator.com/jobs%%'",                            "hn_jobs_page_not_listing"),
+]
+
+
+def _bulk_block_obvious(conn) -> int:
+    """
+    SQL-based instant blocking for jobs that are obviously not gig work.
+    Returns count of newly-blocked jobs.
+    """
+    total = 0
+    with conn.cursor() as cur:
+        for where_clause, reason in _BULK_RULES:
+            cur.execute(
+                f"""
+                UPDATE jobs
+                SET status = 'blocked', enriched = TRUE, quality_issue = %s
+                WHERE ({where_clause})
+                  AND status NOT IN ('blocked', 'completed', 'applied', 'skipped')
+                """,
+                (reason,),
+            )
+            total += cur.rowcount
+    conn.commit()
+    if total:
+        log.info("Bulk-blocked %d obvious non-jobs (school pages, HN threads, etc.)", total)
+    return total
+
+
 # ── Per-job enrichment ────────────────────────────────────────────────────────
 
 def enrich_job(job: dict) -> dict:
@@ -506,6 +545,12 @@ def run(limit: int = 100) -> list[dict]:
 
     try:
         _ensure_columns(conn)
+
+        # ── Step 0: Bulk-block obvious non-jobs before hitting the LLM gate ──
+        # Instantly removes school enrollment pages, HN threads, Reddit posts
+        # and other known-bad URL patterns. No API calls needed for these.
+        _bulk_block_obvious(conn)
+
         jobs = _get_unenriched(conn, limit)
         if not jobs:
             log.info("No unenriched jobs found.")

@@ -16,7 +16,27 @@ replacing the heuristic Firecrawl/Crawlee filter with LLM judgment.
 
 ---
 
+## When this runs automatically
+
+Every 15 minutes, the `\CareerBridge_Gate` Windows scheduled task runs
+`scripts/enrich_jobs.py`, which:
+1. Calls `_bulk_block_obvious()` — instant SQL block for school pages, HN threads, Reddit posts
+2. Calls the Claude gate on remaining unenriched jobs
+3. Assigns `job_type`, stores `source_url`, writes `official_url`
+
+**You do not need to invoke this skill for routine discovery.** It is automatic.
+Use `/discover-and-gate` when you want a one-shot sweep of the full backlog or
+when you want to process a large batch in parallel with multiple subagents.
+
+---
+
 ## Execution procedure
+
+### Step 0 — Bulk-block obvious non-jobs (instant, no LLM)
+
+Run `scripts/bulk_block_obvious.py` first. This SQL-blocks school enrollment pages
+(us_schools source), HN comment threads, Reddit posts, and Indeed school pages without
+spending any LLM calls. Typically removes 30-40% of pending jobs immediately.
 
 ### Step 1 — Count unenriched work
 

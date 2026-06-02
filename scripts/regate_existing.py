@@ -71,19 +71,27 @@ def _backfill_source_url(conn) -> int:
     return count
 
 
-def _get_jobs_to_regate(conn, limit: int) -> list[dict]:
+def _get_jobs_to_regate(conn, limit: int, sources: list[str] | None = None) -> list[dict]:
     import psycopg2.extras
+    source_clause = ""
+    params: list = []
+    if sources:
+        placeholders = ",".join(["%s"] * len(sources))
+        source_clause = f"AND source IN ({placeholders})"
+        params.extend(sources)
+    params.append(limit)
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute("""
+        cur.execute(f"""
             SELECT id, url, title, company, source,
                    official_url,
                    description AS official_description
             FROM jobs
             WHERE status NOT IN ('blocked', 'completed', 'skipped')
               AND job_type IS NULL
+              {source_clause}
             ORDER BY discovered_at DESC
             LIMIT %s
-        """, (limit,))
+        """, params)
         return [dict(r) for r in cur.fetchall()]
 
 
@@ -120,6 +128,9 @@ def main():
                         help="Classify without writing to DB")
     parser.add_argument("--limit", type=int, default=500,
                         help="Max jobs to process (default 500)")
+    parser.add_argument("--sources", type=str, default="",
+                        help="Comma-separated source values to process (e.g. 'greenhouse,hn_hiring'). "
+                             "Empty = all sources.")
     args = parser.parse_args()
 
     conn = _pg()
@@ -128,7 +139,8 @@ def main():
     backfilled = _backfill_source_url(conn)
     log.info("Backfilled source_url for %d rows", backfilled)
 
-    jobs = _get_jobs_to_regate(conn, args.limit)
+    source_filter = [s.strip() for s in args.sources.split(",") if s.strip()]
+    jobs = _get_jobs_to_regate(conn, args.limit, source_filter)
     log.info("Found %d jobs to re-gate%s", len(jobs),
              " (DRY RUN)" if args.dry_run else "")
 

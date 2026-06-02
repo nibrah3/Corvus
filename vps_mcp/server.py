@@ -329,7 +329,11 @@ def upsert_job(
 
 @mcp.tool()
 def get_unenriched_jobs(limit: int = 50) -> dict:
-    """Return jobs that have not yet been enriched with an official employer URL."""
+    """Return jobs that have not yet been gate-evaluated and need classification.
+
+    Excludes: blocked, completed, skipped, failed, error, partial, applied
+    — and also excludes jobs that already have a job_type set (classified).
+    """
     try:
         _ensure_enrichment_columns()
         conn = _pg()
@@ -339,7 +343,9 @@ def get_unenriched_jobs(limit: int = 50) -> dict:
             SELECT id, url, title, company, source, discovered_at
             FROM jobs
             WHERE (enriched IS FALSE OR enriched IS NULL)
-              AND status NOT IN ('skipped', 'completed')
+              AND job_type IS NULL
+              AND status NOT IN ('blocked', 'skipped', 'completed',
+                                 'failed', 'error', 'partial', 'applied')
             ORDER BY discovered_at DESC
             LIMIT %s
             """,

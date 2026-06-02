@@ -248,9 +248,45 @@ def _extract_official_url(platform_url: str, content: str) -> str | None:
 
 # ── Claude gate ────────────────────────────────────────────────────────────────
 
-_OR_KEY   = os.environ.get("OPENROUTER_API_KEY", "")
-_OR_BASE  = "https://openrouter.ai/api/v1"
-_OR_MODEL = "anthropic/claude-sonnet-4-6"
+_ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+_OR_KEY        = os.environ.get("OPENROUTER_API_KEY", "")   # legacy fallback only
+_GATE_MODEL    = "claude-sonnet-4-6"     # Anthropic model ID
+_OR_MODEL      = "anthropic/claude-sonnet-4-6"  # OpenRouter fallback
+
+
+def _gate_llm_call(user_msg: str) -> str:
+    """
+    Call Claude for the quality gate. Uses Anthropic SDK if ANTHROPIC_API_KEY
+    is set, falls back to OpenRouter if only OPENROUTER_API_KEY is available.
+    """
+    if _ANTHROPIC_KEY:
+        import anthropic
+        client = anthropic.Anthropic(api_key=_ANTHROPIC_KEY)
+        resp = client.messages.create(
+            model=_GATE_MODEL,
+            max_tokens=400,
+            system=_GATE_SYSTEM,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        return (resp.content[0].text or "").strip()
+
+    if _OR_KEY:
+        from openai import OpenAI
+        client = OpenAI(api_key=_OR_KEY, base_url="https://openrouter.ai/api/v1")
+        resp = client.chat.completions.create(
+            model=_OR_MODEL,
+            max_tokens=400,
+            temperature=0,
+            messages=[
+                {"role": "system", "content": _GATE_SYSTEM},
+                {"role": "user",   "content": user_msg},
+            ],
+        )
+        return (resp.choices[0].message.content or "").strip()
+
+    raise RuntimeError(
+        "No LLM API key available. Set ANTHROPIC_API_KEY in D:\\cb-core\\.env"
+    )
 
 
 def _claude_gate(job: dict, content: str) -> dict | None:
@@ -261,9 +297,10 @@ def _claude_gate(job: dict, content: str) -> dict | None:
     if the job passes, or None if it should be blocked.
 
     The gate blocks professional/licensed roles, blog posts, and vague listings.
+    Uses Anthropic SDK directly (ANTHROPIC_API_KEY), falls back to OpenRouter.
     """
-    if not _OR_KEY:
-        log.warning("OPENROUTER_API_KEY not set — gate disabled, passing all jobs")
+    if not _ANTHROPIC_KEY and not _OR_KEY:
+        log.warning("No LLM API key — gate disabled, passing all jobs as other_gig")
         return {"job_type": "other_gig", "requirements": "", "official_url": ""}
 
     title   = (job.get("title") or "").strip()
@@ -278,18 +315,7 @@ def _claude_gate(job: dict, content: str) -> dict | None:
     )
 
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=_OR_KEY, base_url=_OR_BASE)
-        resp = client.chat.completions.create(
-            model=_OR_MODEL,
-            max_tokens=400,
-            temperature=0,
-            messages=[
-                {"role": "system", "content": _GATE_SYSTEM},
-                {"role": "user",   "content": user_msg},
-            ],
-        )
-        raw = (resp.choices[0].message.content or "").strip()
+        raw = _gate_llm_call(user_msg)
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         import json as _json
@@ -398,6 +424,11 @@ _BULK_RULES = [
     ("url LIKE '%%indeed.com%%' AND (title ILIKE 'apply at%%' OR title ILIKE 'open enrollment%%')",
                                                                        "school_enrollment_page"),
     ("url LIKE '%%ycombinator.com/jobs%%'",                            "hn_jobs_page_not_listing"),
+    # Aggregator search result pages — keyword search URLs, not individual listings
+    ("url ~ 'indeed\\.com/q-[a-z0-9-]+-jobs\\.html$'",               "aggregator_search_page"),
+    ("url ~ 'ziprecruiter\\.com/Jobs/[A-Za-z0-9-]+(--|/--in-)'",      "aggregator_search_page"),
+    ("url ~ 'simplyhired\\.com/q-[a-z0-9-]+-jobs\\.html$'",          "aggregator_search_page"),
+    ("url ~ 'glassdoor\\.com/Job/[a-z0-9-]+-jobs-'",                  "aggregator_search_page"),
 ]
 
 
@@ -414,7 +445,8 @@ def _bulk_block_obvious(conn) -> int:
                 UPDATE jobs
                 SET status = 'blocked', enriched = TRUE, quality_issue = %s
                 WHERE ({where_clause})
-                  AND status NOT IN ('blocked', 'completed', 'applied', 'skipped')
+                  AND status NOT IN ('blocked', 'completed', 'applied', 'skipped',
+                                     'failed', 'error', 'partial')
                 """,
                 (reason,),
             )

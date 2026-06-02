@@ -35,6 +35,24 @@ RULES = [
     ("HN jobs page (not individual listing)",
      "url LIKE '%%ycombinator.com/jobs%%'",
      "hn_jobs_page_not_listing"),
+
+    # Aggregator search result pages — the URL is a keyword search, not an individual listing.
+    # Pattern: /q-<keywords>-l-<location>-jobs.html or /Jobs/<SearchTerm>
+    ("Indeed search result pages",
+     "url ~ 'indeed\\.com/q-[a-z0-9-]+-jobs\\.html$'",
+     "aggregator_search_page"),
+
+    ("ZipRecruiter search result pages",
+     "url ~ 'ziprecruiter\\.com/Jobs/[A-Za-z0-9-]+(--|/--in-)'",
+     "aggregator_search_page"),
+
+    ("SimplyHired search result pages",
+     "url ~ 'simplyhired\\.com/q-[a-z0-9-]+-jobs\\.html$'",
+     "aggregator_search_page"),
+
+    ("Glassdoor search result pages",
+     "url ~ 'glassdoor\\.com/Job/[a-z0-9-]+-jobs-'",
+     "aggregator_search_page"),
 ]
 
 def run():

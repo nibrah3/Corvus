@@ -62,23 +62,41 @@ _SYSTEM_PROMPT = (
 
 
 def _call_claude(text: str) -> dict | None:
-    key = os.environ.get("OPENROUTER_API_KEY", "")
-    if not key:
-        log.warning("OPENROUTER_API_KEY not set — falling back to heuristics")
+    """Call Claude for school criteria analysis. Prefers Anthropic SDK, falls back to OpenRouter."""
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    or_key        = os.environ.get("OPENROUTER_API_KEY", "")
+
+    if not anthropic_key and not or_key:
+        log.warning("No LLM API key set — falling back to heuristics")
         return None
+
+    user_content = f"School website text:\n\n{text[:6000]}"
+
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=key, base_url="https://openrouter.ai/api/v1")
-        resp = client.chat.completions.create(
-            model="anthropic/claude-sonnet-4-6",
-            max_tokens=900,
-            temperature=0,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": f"School website text:\n\n{text[:6000]}"},
-            ],
-        )
-        raw = (resp.choices[0].message.content or "").strip()
+        if anthropic_key:
+            import anthropic
+            client = anthropic.Anthropic(api_key=anthropic_key)
+            resp = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=900,
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_content}],
+            )
+            raw = (resp.content[0].text or "").strip()
+        else:
+            from openai import OpenAI
+            client = OpenAI(api_key=or_key, base_url="https://openrouter.ai/api/v1")
+            resp = client.chat.completions.create(
+                model="anthropic/claude-sonnet-4-6",
+                max_tokens=900,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user",   "content": user_content},
+                ],
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+
         if raw.startswith("```"):
             raw = "\n".join(raw.splitlines()[1:])
             raw = raw[:raw.rfind("```")] if "```" in raw else raw

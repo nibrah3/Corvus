@@ -71,15 +71,30 @@ def _backfill_source_url(conn) -> int:
     return count
 
 
-def _get_jobs_to_regate(conn, limit: int, sources: list[str] | None = None) -> list[dict]:
+def _get_jobs_to_regate(conn, limit: int,
+                        sources: list[str] | None = None,
+                        reclassify_fallback: bool = False) -> list[dict]:
     import psycopg2.extras
-    source_clause = ""
     params: list = []
+    extra_clauses = []
+
     if sources:
         placeholders = ",".join(["%s"] * len(sources))
-        source_clause = f"AND source IN ({placeholders})"
+        extra_clauses.append(f"source IN ({placeholders})")
         params.extend(sources)
+
+    if reclassify_fallback:
+        # Re-process jobs that got other_gig as a fallback label (LLM call failed)
+        # These have job_type='other_gig' but quality_issue IS NULL (not manually set)
+        extra_clauses.append("job_type = 'other_gig'")
+        extra_clauses.append("quality_issue IS NULL")
+        where_type = "OR job_type = 'other_gig'"
+    else:
+        where_type = ""
+
+    source_clause = ("AND " + " AND ".join(extra_clauses)) if extra_clauses else ""
     params.append(limit)
+
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(f"""
             SELECT id, url, title, company, source,
@@ -87,7 +102,7 @@ def _get_jobs_to_regate(conn, limit: int, sources: list[str] | None = None) -> l
                    description AS official_description
             FROM jobs
             WHERE status NOT IN ('blocked', 'completed', 'skipped')
-              AND job_type IS NULL
+              AND (job_type IS NULL {where_type})
               {source_clause}
             ORDER BY discovered_at DESC
             LIMIT %s
@@ -131,6 +146,9 @@ def main():
     parser.add_argument("--sources", type=str, default="",
                         help="Comma-separated source values to process (e.g. 'greenhouse,hn_hiring'). "
                              "Empty = all sources.")
+    parser.add_argument("--reclassify-fallback", action="store_true",
+                        help="Re-classify jobs that got the 'other_gig' fallback due to failed LLM calls. "
+                             "Requires job_type='other_gig' AND quality_issue IS NULL (not manually set).")
     args = parser.parse_args()
 
     conn = _pg()
@@ -140,7 +158,8 @@ def main():
     log.info("Backfilled source_url for %d rows", backfilled)
 
     source_filter = [s.strip() for s in args.sources.split(",") if s.strip()]
-    jobs = _get_jobs_to_regate(conn, args.limit, source_filter)
+    jobs = _get_jobs_to_regate(conn, args.limit, source_filter,
+                               reclassify_fallback=args.reclassify_fallback)
     log.info("Found %d jobs to re-gate%s", len(jobs),
              " (DRY RUN)" if args.dry_run else "")
 

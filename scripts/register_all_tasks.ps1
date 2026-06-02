@@ -47,7 +47,7 @@ Write-Host "Registered: CareerBridge_Sweep"
 # writes clean records to jobs table. No Python LLM calls — Claude Code IS the LLM.
 schtasks /delete /tn "CareerBridge_Gate" /f 2>$null
 schtasks /create /tn "CareerBridge_Gate" `
-    /tr "$claude --print --no-confirmation -p `"@$root\prompts\skill_gate_discoveries.md`" >> `"$root\logs\gate.log`" 2>&1" `
+    /tr "$claude --print --dangerously-skip-permissions -p `"@$root\prompts\skill_gate_discoveries.md`" >> `"$root\logs\gate.log`" 2>&1" `
     /sc MINUTE /mo 15 /ru $user /rl HIGHEST /f
 Write-Host "Registered: CareerBridge_Gate"
 
@@ -56,7 +56,7 @@ Write-Host "Registered: CareerBridge_Gate"
 # finds new listings, gates them, adjusts tiers. Keeps the catalogue alive and self-maintaining.
 schtasks /delete /tn "CareerBridge_Catalogue" /f 2>$null
 schtasks /create /tn "CareerBridge_Catalogue" `
-    /tr "$claude --print --no-confirmation -p `"@$root\prompts\skill_catalogue_poll.md`" >> `"$root\logs\catalogue.log`" 2>&1" `
+    /tr "$claude --print --dangerously-skip-permissions -p `"@$root\prompts\skill_catalogue_poll.md`" >> `"$root\logs\catalogue.log`" 2>&1" `
     /sc HOURLY /mo 6 /ru $user /rl HIGHEST /f /st 03:00
 Write-Host "Registered: CareerBridge_Catalogue"
 
@@ -65,7 +65,7 @@ Write-Host "Registered: CareerBridge_Catalogue"
 # generates targeted search strategy, archives dead platforms.
 schtasks /delete /tn "CareerBridge_WeeklyGap" /f 2>$null
 schtasks /create /tn "CareerBridge_WeeklyGap" `
-    /tr "$claude --print --no-confirmation -p `"@$root\prompts\skill_gap_analysis.md`" >> `"$root\logs\gap_analysis.log`" 2>&1" `
+    /tr "$claude --print --dangerously-skip-permissions -p `"@$root\prompts\skill_gap_analysis.md`" >> `"$root\logs\gap_analysis.log`" 2>&1" `
     /sc WEEKLY /d MON /st 09:00 /ru $user /rl HIGHEST /f
 Write-Host "Registered: CareerBridge_WeeklyGap"
 

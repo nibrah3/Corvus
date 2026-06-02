@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__cdp__cdp_eval",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_block_js_clicks.py"
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "matcher": "*",

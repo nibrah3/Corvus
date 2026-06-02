@@ -75,7 +75,9 @@ def _get_jobs_to_regate(conn, limit: int) -> list[dict]:
     import psycopg2.extras
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute("""
-            SELECT id, url, title, company, source, official_url, official_description
+            SELECT id, url, title, company, source,
+                   official_url,
+                   description AS official_description
             FROM jobs
             WHERE status NOT IN ('blocked', 'completed', 'skipped')
               AND job_type IS NULL
@@ -103,9 +105,7 @@ def _apply_gate_result(conn, job_id: int, result: dict | None,
             cur.execute("""
                 UPDATE jobs
                 SET job_type=%s,
-                    official_description=COALESCE(
-                        NULLIF(%s,''), official_description
-                    )
+                    description=COALESCE(NULLIF(%s,''), description)
                 WHERE id=%s
             """, (result["job_type"],
                   result.get("requirements") or "",

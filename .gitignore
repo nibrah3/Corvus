@@ -5,6 +5,7 @@ __pycache__/
 *.db
 memory_store.json
 logs/
+tmp/
 capture_mcp/samples/
 capture_mcp/page_test/
 humanizer_mcp/test_*.png
@@ -15,3 +16,4 @@ humanizer_mcp/smoke_test.cpython*
 profiles/*.json
 *.jsonl
 runtime/
+node_modules/

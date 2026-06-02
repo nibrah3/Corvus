@@ -177,6 +177,7 @@ class CDPExecutor:
         self._lock    = threading.Lock()
         self._connected: bool        = False
         self._ws_ready  = threading.Event()  # set when WS handshake completes
+        self._ws_alive  = threading.Event()  # cleared on close; alive check after open
         # Track simulated cursor position for realistic path generation
         self._cursor_x: float        = 400.0
         self._cursor_y: float        = 300.0
@@ -184,6 +185,7 @@ class CDPExecutor:
     # ── Connection ─────────────────────────────────────────────────────────────
 
     def _on_open(self, ws) -> None:
+        self._ws_alive.set()
         self._ws_ready.set()
 
     def connect(self, port: Optional[int] = None) -> int:
@@ -195,42 +197,62 @@ class CDPExecutor:
 
         self._port = port or discover_cdp_port()
 
-        # Pick the most recently focused page
-        targets = _http_get(f"http://127.0.0.1:{self._port}/json")
-        pages   = [t for t in targets if t.get("type") == "page"]
-        if not pages:
-            raise CDPError(f"No open pages in browser on port {self._port}")
+        last_err: Exception = CDPError("No pages found")
+        for attempt in range(3):
+            if attempt:
+                time.sleep(0.5 * attempt)
 
-        ws_url = pages[0]["webSocketDebuggerUrl"]
+            # Re-fetch targets each attempt — the URL may change
+            targets = _http_get(f"http://127.0.0.1:{self._port}/json")
+            pages   = [t for t in targets if t.get("type") == "page"]
+            if not pages:
+                raise CDPError(f"No open pages in browser on port {self._port}")
 
-        self._ws_ready.clear()
-        self._ws = websocket.WebSocketApp(
-            ws_url,
-            on_open=self._on_open,
-            on_message=self._on_message,
-            on_error=self._on_error,
-            on_close=self._on_close,
-        )
-        # suppress_origin: Chrome 111+ rejects connections whose Origin header
-        # includes a port number. Suppressing it bypasses the check entirely.
-        thread = threading.Thread(
-            target=lambda: self._ws.run_forever(suppress_origin=True), daemon=True
-        )
-        thread.start()
+            ws_url = pages[0]["webSocketDebuggerUrl"]
 
-        # Wait for confirmed handshake (up to 8 seconds)
-        if not self._ws_ready.wait(timeout=8.0):
-            raise CDPError(f"WebSocket handshake timed out for {ws_url}")
-        time.sleep(0.1)  # small buffer after open
+            self._ws_ready.clear()
+            self._ws_alive.clear()
+            self._ws = websocket.WebSocketApp(
+                ws_url,
+                on_open=self._on_open,
+                on_message=self._on_message,
+                on_error=self._on_error,
+                on_close=self._on_close,
+            )
+            # suppress_origin: Chrome 111+ rejects connections whose Origin header
+            # includes a port number. Suppressing it bypasses the check entirely.
+            thread = threading.Thread(
+                target=lambda: self._ws.run_forever(suppress_origin=True), daemon=True
+            )
+            thread.start()
 
-        # Enable the domains we'll use
-        self._send("DOM.enable")
-        self._send("Accessibility.enable")
-        self._send("Page.enable")
-        self._send("Page.addScriptToEvaluateOnNewDocument", {"source": _STEALTH_JS})
-        self._connected = True
+            # Wait for confirmed handshake (up to 8 seconds)
+            if not self._ws_ready.wait(timeout=8.0):
+                last_err = CDPError(f"WebSocket handshake timed out for {ws_url}")
+                continue
+            time.sleep(0.3)  # buffer after open — let Chrome settle
 
-        return self._port
+            # Verify connection is still alive after the settle period
+            if not self._ws_alive.is_set():
+                last_err = CDPError(f"Browser closed CDP connection immediately (attempt {attempt+1})")
+                continue
+
+            try:
+                self._send("DOM.enable")
+                self._send("Accessibility.enable")
+                self._send("Page.enable")
+                self._send("Page.addScriptToEvaluateOnNewDocument", {"source": _STEALTH_JS})
+                self._connected = True
+                return self._port
+            except Exception as e:
+                last_err = CDPError(f"Domain enable failed: {e}")
+                try:
+                    self._ws.close()
+                except Exception:
+                    pass
+                continue
+
+        raise last_err
 
     def connect_ws(self, ws_url: str) -> None:
         """
@@ -308,9 +330,11 @@ class CDPExecutor:
 
     def _on_error(self, ws, exc) -> None:
         self._connected = False
+        self._ws_alive.clear()
 
     def _on_close(self, ws, *_) -> None:
         self._connected = False
+        self._ws_alive.clear()
 
     # ── Core send/receive ──────────────────────────────────────────────────────
 
@@ -425,6 +449,7 @@ class CDPExecutor:
         (function() {{
             var el = {js_expr};
             if (!el) return null;
+            el.scrollIntoView({{behavior: 'instant', block: 'center'}});
             var r = el.getBoundingClientRect();
             return {{x: r.left + r.width/2, y: r.top + r.height/2, found: true}};
         }})()

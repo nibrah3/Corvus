@@ -262,6 +262,11 @@ class AssessmentPipeline:
             if answerable:
                 self._handle_mcq(answerable)
 
+            # Supervised mode: show a summary of every answer selected on this page
+            # and wait for user approval before clicking Next/Submit.
+            if submit_btn and self._cfg.human_gate and (answerable or remaining_text):
+                self._pre_submit_review(page_num)
+
             # Click Next/Submit
             if submit_btn:
                 if self._cfg.is_throughput:
@@ -276,6 +281,58 @@ class AssessmentPipeline:
                 return
 
         log.warning("Reached max_pages=%d without completion", self._cfg.max_pages)
+
+    # ── Pre-submit review gate (supervised mode) ──────────────────────────────
+
+    def _pre_submit_review(self, page_num: int) -> None:
+        """
+        In supervised mode, scrape the current selections from the page,
+        log them clearly, and pause via claude_code_gate so the operator
+        can see every answer before Next/Submit is clicked.
+
+        The gate label is "Page N answers — approve to submit?" and the
+        draft body lists every selected radio/checkbox label and textarea value.
+        Operator can Approve (proceed), Edit (no-op — operator handles manually),
+        or Skip (submits anyway after timeout).
+        """
+        try:
+            # Collect currently selected MCQ answers
+            selected = self._cdp.eval_js(
+                "JSON.stringify(Array.from(document.querySelectorAll("
+                "  '[role=radio][aria-checked=true],[role=checkbox][aria-checked=true]"
+                ",[input[type=radio]:checked],[input[type=checkbox]:checked]')).map("
+                "  function(el){return el.getAttribute('aria-label')||el.value||el.innerText||'?';}"
+                "))"
+            ) or "[]"
+            import json as _json
+            mcq_answers = _json.loads(selected)
+
+            # Collect textarea values
+            textarea_vals = self._cdp.eval_js(
+                "JSON.stringify(Array.from(document.querySelectorAll('textarea'))"
+                ".map(function(t){return t.value.slice(0,120);}).filter(function(v){return v;}))"
+            ) or "[]"
+            prose_answers = _json.loads(textarea_vals)
+
+            summary_lines = [f"Page {page_num} — answers ready to submit:"]
+            for i, ans in enumerate(mcq_answers, 1):
+                summary_lines.append(f"  MCQ {i}: {ans}")
+            for i, val in enumerate(prose_answers, 1):
+                summary_lines.append(f"  Text {i}: {val[:100]}...")
+            summary = "\n".join(summary_lines)
+
+            log.info("[PRE-SUBMIT REVIEW]\n%s", summary)
+            tg_notify(f"[Review] {summary[:400]}")
+
+            approved = claude_code_gate(
+                label=f"Page {page_num} — approve to submit?",
+                draft=summary,
+                timeout=120.0,
+            )
+            if approved is None:
+                log.info("Pre-submit gate timed out or not available — proceeding")
+        except Exception as e:
+            log.warning("Pre-submit review failed (%s) — proceeding anyway", e)
 
     # ── Page state helpers ────────────────────────────────────────────────────
 
@@ -504,26 +561,39 @@ class AssessmentPipeline:
     # ── Throughput execution (direct CDP, no humanizer) ──────────────────────
 
     def _cdp_click(self, node: dict) -> None:
-        """Direct CDP JS click — throughput mode only."""
-        name = node.get("name", "")
-        role = node.get("role", "")
+        """
+        Throughput-mode click: resolve element coords via getBoundingClientRect,
+        deliver via OS HID (pynput). No JS synthetic click — same coord path as
+        supervised mode but without humanizer timing/pauses.
+        """
+        name    = node.get("name", "")
+        role    = node.get("role", "")
+        esc_dq  = name.replace("\\", "\\\\").replace('"', '\\"')
         try:
-            escaped = name.replace("\\", "\\\\").replace("'", "\\'")
-            self._cdp.click_js(
+            # Find element by aria-label or role+text, return its viewport center
+            coords = self._cdp.eval_js(
                 f"(function(){{"
-                f"  var els=document.querySelectorAll('[role=\"{role}\"]');"
-                f"  for(var i=0;i<els.length;i++){{"
-                f"    var t=(els[i].textContent||els[i].getAttribute('aria-label')||'').trim();"
-                f"    if(t==='{escaped}'){{els[i].click();return true;}}"
+                f"  var el = document.querySelector('[aria-label=\"{esc_dq}\"]')"
+                f"          || document.querySelector('[title=\"{esc_dq}\"]');"
+                f"  if(!el){{"
+                f"    var els=document.querySelectorAll('[role=\"{role}\"]');"
+                f"    for(var i=0;i<els.length;i++){{"
+                f"      var t=(els[i].textContent||els[i].getAttribute('aria-label')||'').trim();"
+                f"      if(t==='{esc_dq}'){{el=els[i];break;}}"
+                f"    }}"
                 f"  }}"
-                f"  var fb=document.querySelector('[aria-label=\"{escaped}\"]')"
-                f"       ||document.querySelector('[title=\"{escaped}\"]');"
-                f"  if(fb){{fb.click();return true;}}"
-                f"  return false;"
+                f"  if(!el) return null;"
+                f"  var r=el.getBoundingClientRect();"
+                f"  return {{x:r.left+r.width/2,y:r.top+r.height/2,found:true}};"
                 f"}})();"
             )
+            if coords and coords.get("found"):
+                ox, oy = self._cdp._get_screen_offset()
+                _hum_click(int(ox + coords["x"]), int(oy + coords["y"]))
+                return
         except Exception as e:
-            log.warning("CDP click failed for '%s': %s", name[:40], e)
+            log.debug("Throughput click coord resolution failed for '%s': %s", name[:40], e)
+        log.warning("Throughput click: could not resolve OS coords for '%s'", name[:40])
 
     def _cdp_type(self, node: dict, text: str) -> None:
         """Focus element via JS + insert text via CDP, works when browser is in background."""

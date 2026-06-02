@@ -176,6 +176,35 @@ When the user selects "System Status":
 - Show the Settings sub-menu.
 - *(Coming soon: will run discover → confirm → CDP enrollment form completion with Telegram-only updates.)*
 
+### OS Click Enforcement Rules
+
+**These rules are enforced by a PreToolUse hook on `mcp__cdp__cdp_eval`. Violations are blocked automatically — understanding them prevents wasted attempts.**
+
+**The principle:** Every interaction that changes browser state (click, type, select, scroll) must be delivered via OS HID (pynput/SendInput) so the cursor is visible and the full event sequence fires. Never use `el.click()`, `dispatchEvent()`, or `form.submit()` via JavaScript — these are synthetic, isTrusted=false, and produce no cursor movement.
+
+**Approved interaction path:**
+1. Read element coords via CDP: `getBoundingClientRect()` or `DOM.getBoxModel` → viewport `(vx, vy)`
+2. Add screen offset: `window.screenX` + `(outerHeight - innerHeight)` → absolute screen coords
+3. Deliver via `mcp__humanizer__humanized_click(screen_x, screen_y)` or `CDPExecutor.click_js(expr)`
+
+**The hook blocks any `cdp_eval` containing:**
+- `.click()` · `dispatchEvent()` · `form.submit()` · `new MouseEvent(` · `new PointerEvent(`
+
+**If the standard axtree path fails** (backendNodeId not found — common on React SPAs):
+- Use `getBoundingClientRect()` via JS (read-only — not blocked) → get `(vx, vy)` → add screen offset → `humanized_click`
+- This is Tier 2 in all click methods and works on every rendered element including Google Forms
+
+**For the annotation pipeline:**  
+`_select_option()`, `_advance()`, and `_click_node()` all use the Tier 1 → Tier 2 (getBoundingClientRect + pynput) chain with no JS fallback.
+
+**For the assessment pipeline:**  
+`_click_node()` uses Tier 1 (getBoxModel) → Tier 2 (getBoundingClientRect + pynput). Supervised mode shows a pre-submit review gate before every Next/Submit click.
+
+**Skill: `/discover-and-gate`** — spawns parallel subagents to quality-gate unenriched jobs.  
+See `D:\cb-core\prompts\skill_discover_and_gate.md` for the full procedure.
+
+---
+
 ### Browser Mode
 
 When the user selects "Browser Mode":

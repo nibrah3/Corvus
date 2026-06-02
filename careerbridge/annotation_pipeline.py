@@ -372,19 +372,28 @@ class AnnotationPipeline:
                     self._click_node(node)
                     return True
 
-        # JS text-search fallback (fires isTrusted=false click — last resort)
-        safe = answer.replace("'", "\\'").lower()
-        clicked = self._cdp.eval_js(
+        # Coordinate fallback — find element by text, get bounding rect, OS HID click.
+        # Never fires el.click() (isTrusted=false). If coords can't be resolved, log and skip.
+        safe_dq = answer.replace("\\", "\\\\").replace('"', '\\"')
+        coords = self._cdp.eval_js(
             f"(function(){{"
             f"var els = Array.from(document.querySelectorAll("
             f"  'button,[role=radio],[role=option],label'));"
             f"var el = els.find(function(e){{"
-            f"  return (e.innerText||'').trim().toLowerCase().includes('{safe}');"
+            f"  return (e.innerText||'').trim().toLowerCase().includes(\"{safe_dq.lower()}\");"
             f"}});"
-            f"if(el){{el.click();return true;}}return false;"
+            f"if(!el) return null;"
+            f"var r=el.getBoundingClientRect();"
+            f"return {{x:r.left+r.width/2,y:r.top+r.height/2,found:true}};"
             f"}})()"
         )
-        return bool(clicked)
+        if coords and coords.get("found"):
+            ox, oy = self._cdp._get_screen_offset()
+            _hum_click(int(ox + coords["x"]), int(oy + coords["y"]),
+                       profile=self._profile, rng=self._rng)
+            return True
+        log.warning("Could not resolve OS click coords for answer %r — skipping", answer[:40])
+        return False
 
     # ── Advance to next task ──────────────────────────────────────────────────
 
@@ -399,17 +408,25 @@ class AnnotationPipeline:
                         self._click_node(node)
                         return
 
-        # JS fallback
-        self._cdp.eval_js(
+        # Coordinate fallback — resolve button center via getBoundingClientRect, OS HID click.
+        coords = self._cdp.eval_js(
             "(function(){"
             "var btns = document.querySelectorAll('button');"
             "for (var i = 0; i < btns.length; i++) {"
             "  var t = btns[i].innerText.toLowerCase().trim();"
             "  if (t==='done'||t==='next'||t==='continue') {"
-            "    btns[i].click(); return;"
+            "    var r=btns[i].getBoundingClientRect();"
+            "    return {x:r.left+r.width/2,y:r.top+r.height/2,found:true};"
             "  }"
-            "}})()"
+            "}"
+            "return null;})()"
         )
+        if coords and coords.get("found"):
+            ox, oy = self._cdp._get_screen_offset()
+            _hum_click(int(ox + coords["x"]), int(oy + coords["y"]),
+                       profile=self._profile, rng=self._rng)
+        else:
+            log.warning("Advance: could not resolve Next/Done button coords via OS path")
 
     def _is_session_done(self) -> bool:
         try:
@@ -446,17 +463,26 @@ class AnnotationPipeline:
         except Exception:
             pass
 
-        # JS click fallback (isTrusted=false, but better than nothing)
+        # Coordinate fallback — getBoundingClientRect on role+name match, OS HID click.
+        # Never calls el.click() — that would be isTrusted=false.
         try:
-            escaped = name.replace("'", "\\'")
             role    = node.get("role", "button")
-            self._cdp.eval_js(
+            esc_dq  = name.replace("\\", "\\\\").replace('"', '\\"')
+            coords  = self._cdp.eval_js(
                 f"(function(){{"
                 f"var els=document.querySelectorAll('[role={role!r}],button');"
                 f"for(var i=0;i<els.length;i++){{"
-                f"  if((els[i].innerText||'').trim()==='{escaped}'){{"
-                f"    els[i].click();return;}}"
-                f"}}}})();"
+                f"  if((els[i].innerText||els[i].getAttribute('aria-label')||'').trim()==='{esc_dq}'){{"
+                f"    var r=els[i].getBoundingClientRect();"
+                f"    return {{x:r.left+r.width/2,y:r.top+r.height/2,found:true}};"
+                f"  }}"
+                f"}}return null;}})();"
             )
-        except Exception as e:
-            log.warning("All click methods failed for '%s': %s", name[:40], e)
+            if coords and coords.get("found"):
+                ox, oy = self._cdp._get_screen_offset()
+                _hum_click(int(ox + coords["x"]), int(oy + coords["y"]),
+                           profile=self._profile, rng=self._rng)
+                return
+        except Exception:
+            pass
+        log.warning("All OS click paths failed for '%s' — element not reachable", name[:40])

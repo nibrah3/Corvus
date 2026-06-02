@@ -248,6 +248,30 @@ def get_job(job_id: int) -> dict:
         return {"error": str(e)}
 
 
+def _ensure_enrichment_columns() -> None:
+    """Add enrichment columns to jobs table if they don't already exist."""
+    try:
+        conn = _pg()
+        cur = conn.cursor()
+        cur.execute("""
+            ALTER TABLE jobs
+                ADD COLUMN IF NOT EXISTS official_url         TEXT,
+                ADD COLUMN IF NOT EXISTS official_description TEXT,
+                ADD COLUMN IF NOT EXISTS enriched             BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS quality_issue        TEXT,
+                ADD COLUMN IF NOT EXISTS source_url           TEXT,
+                ADD COLUMN IF NOT EXISTS job_type             TEXT
+        """)
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS jobs_enriched_idx ON jobs (enriched) WHERE enriched IS FALSE"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS jobs_type_idx ON jobs (job_type)"
+        )
+    except Exception as e:
+        pass  # columns may already exist
+
+
 @mcp.tool()
 def upsert_job(
     url: str,
@@ -256,26 +280,113 @@ def upsert_job(
     description: str = "",
     score: float = 0.0,
     source: str = "manual",
-    profile_id: str = ""
+    profile_id: str = "",
+    official_url: str = "",
+    source_url: str = "",
+    job_type: str = "",
 ) -> dict:
-    """Insert or update a job in VPS postgres (used for manually submitted jobs)."""
+    """
+    Insert or update a job in VPS postgres.
+
+    url          — canonical employer career/ATS URL (NOT a platform/aggregator link)
+    source_url   — discovery URL where the job was found (platform, board, blog)
+    job_type     — category: ai_training, data_annotation, search_rating, transcription,
+                   translation, content_writing, social_media, virtual_assistant,
+                   customer_support, microtask, tutoring, testing, moderation, gpt, other_gig
+    official_url — legacy alias for url (kept for backward compat with VPS discovery)
+    """
     try:
+        _ensure_enrichment_columns()
         conn = _pg()
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO jobs (url, title, company, description, score, source, profile_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            INSERT INTO jobs (url, title, company, description, score, source, profile_id,
+                              official_url, enriched, source_url, job_type)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (url) DO UPDATE SET
-                title=EXCLUDED.title, company=EXCLUDED.company,
-                description=EXCLUDED.description, score=EXCLUDED.score,
-                source=EXCLUDED.source, profile_id=EXCLUDED.profile_id
+                title        = EXCLUDED.title,
+                company      = EXCLUDED.company,
+                description  = EXCLUDED.description,
+                score        = EXCLUDED.score,
+                source       = EXCLUDED.source,
+                profile_id   = EXCLUDED.profile_id,
+                official_url = COALESCE(NULLIF(EXCLUDED.official_url,''), jobs.official_url),
+                source_url   = COALESCE(NULLIF(EXCLUDED.source_url,''),   jobs.source_url),
+                job_type     = COALESCE(NULLIF(EXCLUDED.job_type,''),     jobs.job_type),
+                enriched     = CASE WHEN EXCLUDED.official_url != '' THEN TRUE ELSE jobs.enriched END
             RETURNING id
             """,
-            (url, title, company, description, score, source, profile_id or None)
+            (url, title, company, description, score, source, profile_id or None,
+             official_url or None, bool(official_url),
+             source_url or None, job_type or None)
         )
         job_id = cur.fetchone()[0]
         return {"job_id": job_id, "url": url}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def get_unenriched_jobs(limit: int = 50) -> dict:
+    """Return jobs that have not yet been enriched with an official employer URL."""
+    try:
+        _ensure_enrichment_columns()
+        conn = _pg()
+        cur = conn.cursor(cursor_factory=__import__("psycopg2.extras", fromlist=["RealDictCursor"]).RealDictCursor)
+        cur.execute(
+            """
+            SELECT id, url, title, company, source, discovered_at
+            FROM jobs
+            WHERE (enriched IS FALSE OR enriched IS NULL)
+              AND status NOT IN ('skipped', 'completed')
+            ORDER BY discovered_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = [_row_to_dict(r) for r in cur.fetchall()]
+        return {"jobs": rows, "count": len(rows)}
+    except Exception as e:
+        return {"error": str(e), "jobs": []}
+
+
+@mcp.tool()
+def update_job_enrichment(
+    job_id: int,
+    official_url: str,
+    official_description: str = "",
+    quality_issue: str = "",
+    source_url: str = "",
+    job_type: str = "",
+) -> dict:
+    """
+    Store the official employer URL, job type, and enriched description for a job.
+    Set quality_issue to 'no_official_url' when extraction failed.
+    source_url — the discovery platform URL where this job was originally found.
+    job_type   — category from the job type taxonomy.
+    """
+    try:
+        _ensure_enrichment_columns()
+        conn = _pg()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE jobs
+            SET official_url         = %s,
+                official_description = %s,
+                enriched             = TRUE,
+                quality_issue        = NULLIF(%s, ''),
+                source_url           = COALESCE(NULLIF(%s, ''), source_url),
+                job_type             = COALESCE(NULLIF(%s, ''), job_type)
+            WHERE id = %s
+            """,
+            (official_url or None, official_description or None, quality_issue,
+             source_url or None, job_type or None, job_id),
+        )
+        if cur.rowcount == 0:
+            return {"error": f"Job {job_id} not found"}
+        return {"ok": True, "job_id": job_id}
     except Exception as e:
         return {"error": str(e)}
 

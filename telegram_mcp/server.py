@@ -2,15 +2,18 @@
 Telegram MCP server — outbound status and streaming only.
 
 Tools:
-  notify          Send a plain message to admin
-  stream_update   Send a live progress tick during a long task
-  send_screenshot Send an image to admin
-  broadcast       Send to all admin chat IDs
+  notify             Send a plain message to admin
+  stream_update      Send a live progress tick during a long task
+  send_screenshot    Send an image to admin
+  send_document      Send a PDF or file to one admin chat
+  broadcast          Send text to all admin chat IDs
+  broadcast_document Send a PDF to all admin chat IDs
 
 Approval flows removed — Claude Code Remote Control handles all interactive decisions.
 """
 from __future__ import annotations
 
+import os
 from typing import Optional
 from _minmcp import MinMCP
 
@@ -95,6 +98,63 @@ def send_screenshot(image_path: str, caption: str = "", chat_id: Optional[int] =
         return {"ok": False, "error": r.get("description", "unknown")}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def send_document(file_path: str, caption: str = "", chat_id: Optional[int] = None) -> dict:
+    """
+    Send a document (PDF, etc.) to an admin Telegram chat.
+
+    Args:
+        file_path: Full local path to the file to send.
+        caption:   Optional caption below the document.
+        chat_id:   Target chat (defaults to primary admin).
+
+    Returns:
+        {ok: bool, message_id: int}
+    """
+    try:
+        from telegram_mcp._bot import send_document as _send_doc, admin_chat_ids
+        cid = chat_id or admin_chat_ids()[0]
+        filename = os.path.basename(file_path)
+        with open(file_path, "rb") as f:
+            doc_bytes = f.read()
+        r = _send_doc(cid, doc_bytes, filename, caption)
+        if r.get("ok"):
+            return {"ok": True, "message_id": r["result"]["message_id"]}
+        return {"ok": False, "error": r.get("description", "unknown")}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def broadcast_document(file_path: str, caption: str = "") -> dict:
+    """
+    Send a document (PDF, etc.) to ALL admin chat IDs simultaneously.
+    Use this for discovery reports that every registered user should receive.
+
+    Args:
+        file_path: Full local path to the file to send.
+        caption:   Optional caption below the document (HTML OK).
+
+    Returns:
+        {sent: int, failed: int}
+    """
+    try:
+        from telegram_mcp._bot import send_document as _send_doc, admin_chat_ids
+        filename = os.path.basename(file_path)
+        with open(file_path, "rb") as f:
+            doc_bytes = f.read()
+        sent = failed = 0
+        for cid in admin_chat_ids():
+            r = _send_doc(cid, doc_bytes, filename, caption)
+            if r.get("ok"):
+                sent += 1
+            else:
+                failed += 1
+        return {"sent": sent, "failed": failed}
+    except Exception as exc:
+        return {"sent": 0, "failed": 0, "error": str(exc)}
 
 
 @mcp.tool()

@@ -9,11 +9,11 @@ import requests
 log = logging.getLogger(__name__)
 
 _BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-_ADMIN_IDS = [
-    cid.strip()
-    for cid in os.environ.get("TELEGRAM_ADMIN_CHAT_ID", "").replace(";", ",").split(",")
-    if cid.strip()
-]
+_ADMIN_IDS: list[str] = []
+for _env_key in ("TELEGRAM_ADMIN_CHAT_ID", "TELEGRAM_ADMIN_CHAT_ID_2"):
+    for _part in os.environ.get(_env_key, "").replace(";", ",").split(","):
+        if _part.strip() and _part.strip() not in _ADMIN_IDS:
+            _ADMIN_IDS.append(_part.strip())
 
 _CRITERIA_EMOJI = {
     "community_college":      "🏫",
@@ -94,3 +94,26 @@ def notify_text(text: str) -> None:
             )
         except Exception:
             pass
+
+
+def broadcast_pdf(pdf_bytes: bytes, filename: str, caption: str = "") -> int:
+    """Send a PDF to all admin chat IDs. Returns count of successful sends."""
+    if not _BOT_TOKEN or not _ADMIN_IDS:
+        return 0
+    sent = 0
+    for chat_id in _ADMIN_IDS:
+        try:
+            r = requests.post(
+                f"https://api.telegram.org/bot{_BOT_TOKEN}/sendDocument",
+                data={"chat_id": chat_id, "caption": caption, "parse_mode": "Markdown"},
+                files={"document": (filename, pdf_bytes, "application/pdf")},
+                timeout=60,
+            )
+            if r.ok:
+                sent += 1
+                log.info("Batch PDF sent to chat %s", chat_id)
+            else:
+                log.warning("Broadcast PDF failed (chat %s): %s", chat_id, r.text[:200])
+        except Exception as e:
+            log.warning("Broadcast PDF error (chat %s): %s", chat_id, e)
+    return sent

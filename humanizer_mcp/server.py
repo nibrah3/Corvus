@@ -15,6 +15,8 @@ per-session variation (same seed → same timing fingerprint across a session).
 from __future__ import annotations
 
 import random
+import threading
+import time
 from typing import Optional
 
 from _minmcp import MinMCP
@@ -32,6 +34,17 @@ mcp = MinMCP("humanizer")
 
 _profile_cache: dict[int, BehaviorProfile] = {}
 _rng_cache: dict[int, random.Random] = {}
+
+# ── Async typing state ────────────────────────────────────────────────────────
+# Characters below this threshold are typed synchronously (fast, no thread).
+# Characters above are typed in a background thread so the MCP tool call
+# returns before the client times out. Call wait_for_typing() afterward.
+_ASYNC_THRESHOLD = 200
+
+_typing_lock  = threading.Lock()      # only one typing job at a time
+_typing_done  = threading.Event()     # set when background typing finishes
+_typing_done.set()                    # initially "nothing is typing"
+_typing_error: list[str] = []        # stores error message if typing thread crashes
 
 
 def _get_session(seed: Optional[int]) -> tuple[BehaviorProfile, random.Random]:
@@ -85,13 +98,76 @@ def humanized_type(
 
     Cursor must already be in the target field before calling.
 
+    SHORT text (<= 200 chars): typed synchronously — tool blocks until done.
+    LONG text  (>  200 chars): typed in a background thread — tool returns
+    immediately with an ETA. Call wait_for_typing() before your next
+    keyboard/mouse action to ensure typing has finished.
+
     Args:
         text: The string to type.
         profile_seed: Integer seed for reproducible per-session timing.
     """
+    global _typing_error
     profile, rng = _get_session(profile_seed)
-    _kb_type(text, profile=profile, rng=rng)
-    return f"typed {len(text)} characters"
+    n = len(text)
+
+    if n <= _ASYNC_THRESHOLD:
+        # Short text: type synchronously — safe within timeout
+        _kb_type(text, profile=profile, rng=rng)
+        return f"typed {n} characters"
+
+    # Long text: background thread so we respond before the client times out.
+    # Estimate wall-clock time: average effective IKI ~175ms (includes spaces,
+    # punctuation pauses, typo corrections) plus 60ms hold per character.
+    eta_s = n * 0.175
+
+    if not _typing_lock.acquire(blocking=False):
+        return f"error: another typing job is still running — call wait_for_typing() first"
+
+    _typing_done.clear()
+    _typing_error.clear()
+
+    def _bg_type():
+        try:
+            _kb_type(text, profile=profile, rng=rng)
+        except Exception as exc:
+            _typing_error.append(str(exc))
+        finally:
+            _typing_done.set()
+            _typing_lock.release()
+
+    t = threading.Thread(target=_bg_type, daemon=True, name="humanizer-type")
+    t.start()
+
+    return f"typing_started: {n} chars | ETA {eta_s:.0f}s | call wait_for_typing() before next action"
+
+
+@mcp.tool()
+def wait_for_typing(timeout_s: float = 120.0) -> str:
+    """
+    Block until the background humanized_type job finishes (or timeout elapses).
+
+    Always call this after a long humanized_type before clicking Submit,
+    navigating, or typing into another field.
+
+    Args:
+        timeout_s: Maximum seconds to wait (default 120).
+                   Set higher for very long paragraphs.
+    Returns:
+        "done"    — typing completed successfully.
+        "timeout" — typing still in progress after timeout_s seconds.
+        "error"   — the typing thread crashed (error message included).
+        "idle"    — no background typing was running (safe to proceed).
+    """
+    if _typing_done.is_set():
+        return "idle"
+
+    finished = _typing_done.wait(timeout=timeout_s)
+    if not finished:
+        return f"timeout: typing still running after {timeout_s:.0f}s"
+    if _typing_error:
+        return f"error: {_typing_error[0]}"
+    return "done"
 
 
 @mcp.tool()

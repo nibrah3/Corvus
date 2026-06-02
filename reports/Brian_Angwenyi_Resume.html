@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Brian Angwenyi — Resume</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Raleway:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Lora', Georgia, serif;
+    background: #f0ede8;
+    color: #1c1c1c;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+
+  .page {
+    width: 780px;
+    background: #fff;
+    box-shadow: 0 6px 40px rgba(0,0,0,0.13);
+  }
+
+  /* ── HEADER BAND ── */
+  .header-top {
+    background: #2c3240;
+    padding: 36px 48px 28px;
+  }
+  .header-name {
+    font-family: 'Raleway', sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 1px;
+  }
+  .header-name span {
+    color: #e8a94a;
+  }
+  .header-tagline {
+    font-family: 'Raleway', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 3.5px;
+    text-transform: uppercase;
+    color: #8a9bb8;
+    margin-top: 6px;
+  }
+
+  /* ── CONTACT STRIP ── */
+  .contact-strip {
+    background: #e8a94a;
+    padding: 10px 48px;
+    display: flex;
+    gap: 30px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .contact-item {
+    font-family: 'Raleway', sans-serif;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #2c3240;
+  }
+  .contact-item span { font-weight: 400; }
+
+  /* ── BODY LAYOUT ── */
+  .body {
+    display: flex;
+  }
+
+  /* ── LEFT MAIN ── */
+  .main {
+    flex: 1;
+    padding: 30px 34px 36px;
+  }
+
+  .summary {
+    font-size: 13px;
+    color: #444;
+    line-height: 1.8;
+    margin-bottom: 26px;
+    font-style: italic;
+    border-bottom: 1px solid #e8e4de;
+    padding-bottom: 22px;
+  }
+
+  .section { margin-bottom: 24px; }
+  .section:last-child { margin-bottom: 0; }
+
+  .section-title {
+    font-family: 'Raleway', sans-serif;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: #2c3240;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1.5px;
+    background: #e8a94a;
+  }
+
+  .job { margin-bottom: 20px; }
+  .job:last-child { margin-bottom: 0; }
+
+  .job-title {
+    font-family: 'Raleway', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #2c3240;
+  }
+  .job-sub {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: 2px;
+    margin-bottom: 8px;
+  }
+  .job-company {
+    font-size: 12px;
+    color: #7a7060;
+    font-style: italic;
+  }
+  .job-date {
+    font-family: 'Raleway', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    color: #e8a94a;
+    background: #2c3240;
+    padding: 2px 9px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .job ul { padding-left: 15px; }
+  .job li {
+    font-size: 12.5px;
+    color: #3a3530;
+    margin-bottom: 4px;
+    line-height: 1.65;
+  }
+
+  /* ── RIGHT SIDEBAR ── */
+  .sidebar {
+    width: 215px;
+    flex-shrink: 0;
+    background: #2c3240;
+    padding: 28px 20px;
+  }
+
+  .sb-section { margin-bottom: 24px; }
+  .sb-section:last-child { margin-bottom: 0; }
+
+  .sb-title {
+    font-family: 'Raleway', sans-serif;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #e8a94a;
+    border-bottom: 1px solid #3f4760;
+    padding-bottom: 5px;
+    margin-bottom: 12px;
+  }
+
+  .lang-block { margin-bottom: 11px; }
+  .lang-name {
+    font-family: 'Raleway', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .lang-dots { display: flex; gap: 4px; margin-top: 5px; }
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #3f4760;
+  }
+  .dot.fill { background: #e8a94a; }
+  .lang-level { font-size: 10px; color: #8a9bb8; margin-top: 3px; font-family: 'Raleway', sans-serif; }
+
+  .skill-list { list-style: none; }
+  .skill-list li {
+    font-size: 11.5px;
+    color: #c8d0e0;
+    padding: 5px 0;
+    border-bottom: 1px solid #3f4760;
+    font-family: 'Raleway', sans-serif;
+    line-height: 1.4;
+  }
+  .skill-list li:last-child { border-bottom: none; }
+
+  .edu-degree { font-size: 12px; font-weight: 600; color: #fff; line-height: 1.4; font-family: 'Raleway', sans-serif; }
+  .edu-school { font-size: 11px; color: #8a9bb8; margin-top: 2px; font-style: italic; }
+  .edu-year { font-size: 10.5px; color: #e8a94a; font-weight: 700; font-family: 'Raleway', sans-serif; margin-top: 4px; }
+  .edu-courses { font-size: 10.5px; color: #6a7888; line-height: 1.5; margin-top: 5px; font-family: 'Raleway', sans-serif; }
+
+  .cert-item {
+    font-size: 11px;
+    color: #c8d0e0;
+    padding: 5px 0;
+    border-bottom: 1px solid #3f4760;
+    line-height: 1.5;
+    font-family: 'Raleway', sans-serif;
+  }
+  .cert-item:last-child { border-bottom: none; }
+  .cert-year { color: #e8a94a; font-size: 10px; display: block; }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .page { box-shadow: none; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header-top">
+    <div class="header-name">Brian <span>Angwenyi</span></div>
+    <div class="header-tagline">AI Language Evaluator &nbsp;·&nbsp; Swahili &amp; Oromo Content Specialist</div>
+  </div>
+  <div class="contact-strip">
+    <div class="contact-item">Nairobi, Kenya</div>
+    <div class="contact-item">brianwriter33@gmail.com</div>
+    <div class="contact-item">+254 718 422 308</div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- MAIN -->
+    <div class="main">
+
+      <div class="summary">
+        Versatile AI language evaluator and content professional with a strong background in Swahili and Oromo media writing, translation review, and AI response quality assessment. Five years of experience producing and auditing language-specific content for digital platforms, combined with two years of dedicated AI data work across pairwise evaluation, annotation, and human-feedback collection. Fluent across three languages with C2-level English, enabling precise calibration of AI model outputs for East African language markets.
+      </div>
+
+      <div class="section">
+        <div class="section-title">Work Experience</div>
+
+        <div class="job">
+          <div class="job-title">Freelance AI Language Evaluator</div>
+          <div class="job-sub">
+            <span class="job-company">Self-Employed — Remote</span>
+            <span class="job-date">Feb 2024 – Present</span>
+          </div>
+          <ul>
+            <li>Evaluate AI-generated text in Swahili, Oromo, and English for factual accuracy, tone appropriateness, cultural sensitivity, and instruction adherence</li>
+            <li>Complete pairwise comparison tasks and response ranking assignments for RLHF model fine-tuning pipelines across multiple AI clients</li>
+            <li>Tag and label collected datasets including audio clips, image descriptions, and conversational data in Swahili and Oromo language contexts</li>
+            <li>Write adversarial and edge-case prompts to stress-test LLM capabilities in multilingual scenarios; submit structured feedback reports per client rubrics</li>
+            <li>Deliver 95%+ quality scores across concurrent projects; consistently praised for cultural accuracy in East African language tasks</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-title">Senior Swahili Content Specialist</div>
+          <div class="job-sub">
+            <span class="job-company">TransPerfect Global — Remote</span>
+            <span class="job-date">Jan 2020 – Jan 2024</span>
+          </div>
+          <ul>
+            <li>Reviewed and edited Swahili translations of marketing, legal, and technical content for global brands entering East African markets</li>
+            <li>Led quality assurance reviews for AI-assisted translation outputs, identifying systematic errors and providing structured feedback to improve automated translation tools</li>
+            <li>Coordinated Oromo-language localization projects for NGO clients, managing terminology consistency and cultural adaptation across deliverables</li>
+            <li>Trained and mentored a team of six junior reviewers on Swahili style guidelines and client-specific content standards</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-title">Digital Journalist &amp; Fact-Checker</div>
+          <div class="job-sub">
+            <span class="job-company">Nation Media Group — Nairobi, Kenya</span>
+            <span class="job-date">Jun 2016 – Dec 2019</span>
+          </div>
+          <ul>
+            <li>Produced daily English and Swahili digital news articles covering tech, business, and social affairs for a 2M+ monthly readership platform</li>
+            <li>Led the editorial fact-checking desk, verifying claims in submitted articles against primary sources and reducing published errors by 35%</li>
+            <li>Introduced structured annotation of reader-submitted UGC content to support the platform's moderation and archival pipelines</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-title">Customer Experience Specialist</div>
+          <div class="job-sub">
+            <span class="job-company">Safaricom Ltd — Nairobi, Kenya</span>
+            <span class="job-date">Sep 2014 – May 2016</span>
+          </div>
+          <ul>
+            <li>Handled inbound customer inquiries in English and Swahili across mobile, data, and M-Pesa financial services channels</li>
+            <li>Maintained a 98% first-contact resolution rate; recognised as top customer satisfaction performer for Q3 2015</li>
+            <li>Assisted in developing Swahili-language FAQ and training guides used across the national customer care team</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+      <div class="sb-section">
+        <div class="sb-title">Languages</div>
+
+        <div class="lang-block">
+          <div class="lang-name">Swahili</div>
+          <div class="lang-dots">
+            <div class="dot fill"></div><div class="dot fill"></div>
+            <div class="dot fill"></div><div class="dot fill"></div><div class="dot fill"></div>
+          </div>
+          <div class="lang-level">Native Speaker</div>
+        </div>
+
+        <div class="lang-block">
+          <div class="lang-name">Oromo</div>
+          <div class="lang-dots">
+            <div class="dot fill"></div><div class="dot fill"></div>
+            <div class="dot fill"></div><div class="dot fill"></div><div class="dot fill"></div>
+          </div>
+          <div class="lang-level">Native Speaker</div>
+        </div>
+
+        <div class="lang-block">
+          <div class="lang-name">English</div>
+          <div class="lang-dots">
+            <div class="dot fill"></div><div class="dot fill"></div>
+            <div class="dot fill"></div><div class="dot fill"></div>
+            <div class="dot" style="background:#5a6480"></div>
+          </div>
+          <div class="lang-level">C2 — Near-Native</div>
+        </div>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-title">Core Skills</div>
+        <ul class="skill-list">
+          <li>AI Response Evaluation</li>
+          <li>RLHF / Pairwise Ranking</li>
+          <li>Swahili &amp; Oromo Copywriting</li>
+          <li>Translation Quality Review</li>
+          <li>Audio &amp; Video Annotation</li>
+          <li>LLM Prompt Writing</li>
+          <li>Content Moderation</li>
+          <li>Fact-Checking &amp; Verification</li>
+          <li>Remote Independent Delivery</li>
+        </ul>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-title">Education</div>
+        <div class="edu-degree">B.A. — Communication &amp; Media Studies</div>
+        <div class="edu-school">Strathmore University<br />Nairobi, Kenya</div>
+        <div class="edu-year">Class of 2014</div>
+        <div class="edu-courses">Digital Journalism · Media Law · Research Methods · Professional Writing · Broadcast Media</div>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-title">Certifications</div>
+        <div class="cert-item">Appen Search Relevance Certification<span class="cert-year">2022</span></div>
+        <div class="cert-item">Google Digital Garage — Digital Marketing<span class="cert-year">2021</span></div>
+        <div class="cert-item">TransPerfect Language Quality Reviewer Badge<span class="cert-year">2020</span></div>
+        <div class="cert-item">IBM AI Fundamentals (Coursera) — In Progress<span class="cert-year">2026</span></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -12,7 +12,7 @@ with open(os.path.join(os.path.dirname(__file__), "..", ".env")) as f:
 import time
 from careerbridge.ixbrowser_connector import ix_open_profile
 from careerbridge.cdp_executor import CDPExecutor
-from careerbridge.assessment_pipeline import _ANSWERABLE_ROLES, _TEXT_INPUT_ROLES
+from careerbridge.assessment_pipeline import ANSWERABLE_ROLES as _ANSWERABLE_ROLES, TEXT_INPUT_ROLES as _TEXT_INPUT_ROLES
 
 url = sys.argv[1] if len(sys.argv) > 1 else "https://www.16personalities.com/free-personality-test"
 profile_id = int(sys.argv[2]) if len(sys.argv) > 2 else 12

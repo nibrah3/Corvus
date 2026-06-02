@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chelsea Bisenius — Resume</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Source+Serif+4:ital,wght@0,300;0,400;0,600;1,300&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Source Serif 4', Georgia, serif;
+    background: #f0ede8;
+    color: #1c1c1c;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+
+  .page {
+    width: 780px;
+    background: #fff;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.12);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: #1a2e3b;
+    color: #fff;
+    padding: 38px 44px 32px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .header-name h1 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    line-height: 1.1;
+  }
+  .header-name .tagline {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11.5px;
+    font-weight: 400;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #a8c4d4;
+    margin-top: 6px;
+  }
+  .header-contact {
+    text-align: right;
+    font-size: 12.5px;
+    color: #c8dde8;
+    line-height: 1.9;
+    white-space: nowrap;
+  }
+  .header-contact a { color: #a8c4d4; text-decoration: none; }
+
+  /* ── BODY ── */
+  .body {
+    display: flex;
+    flex: 1;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 218px;
+    flex-shrink: 0;
+    background: #f7f5f2;
+    padding: 30px 22px;
+    border-right: 1px solid #e4e0da;
+  }
+  .sidebar-section { margin-bottom: 28px; }
+  .sidebar-section:last-child { margin-bottom: 0; }
+
+  .sidebar h3 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #1a2e3b;
+    border-bottom: 2px solid #1a2e3b;
+    padding-bottom: 5px;
+    margin-bottom: 12px;
+  }
+
+  .skill-item {
+    font-size: 12.5px;
+    color: #333;
+    padding: 5px 0;
+    border-bottom: 1px solid #e4e0da;
+    line-height: 1.4;
+  }
+  .skill-item:last-child { border-bottom: none; }
+
+  .edu-entry { margin-bottom: 14px; }
+  .edu-degree {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #1a2e3b;
+    line-height: 1.4;
+  }
+  .edu-school {
+    font-size: 11.5px;
+    color: #666;
+    font-style: italic;
+    margin-top: 1px;
+  }
+  .edu-year {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11px;
+    color: #1a2e3b;
+    font-weight: 600;
+    margin-top: 3px;
+  }
+
+  .cert-item {
+    font-size: 12px;
+    color: #444;
+    padding: 4px 0;
+    border-bottom: 1px solid #e4e0da;
+    line-height: 1.4;
+  }
+  .cert-item:last-child { border-bottom: none; }
+  .cert-year {
+    font-size: 11px;
+    color: #888;
+    font-family: 'Montserrat', sans-serif;
+  }
+
+  /* ── MAIN CONTENT ── */
+  .main {
+    flex: 1;
+    padding: 30px 36px 36px;
+  }
+
+  .summary-box {
+    background: #eef4f7;
+    border-left: 4px solid #1a2e3b;
+    padding: 14px 18px;
+    margin-bottom: 28px;
+    font-size: 13px;
+    color: #333;
+    line-height: 1.7;
+    font-style: italic;
+  }
+
+  .section { margin-bottom: 26px; }
+  .section:last-child { margin-bottom: 0; }
+
+  .section-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #1a2e3b;
+    border-bottom: 2px solid #1a2e3b;
+    padding-bottom: 5px;
+    margin-bottom: 16px;
+  }
+
+  .job { margin-bottom: 20px; }
+  .job:last-child { margin-bottom: 0; }
+
+  .job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .job-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #1a2e3b;
+  }
+  .job-date {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #fff;
+    background: #1a2e3b;
+    padding: 2px 9px;
+    border-radius: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .job-company {
+    font-size: 12.5px;
+    color: #6a7e8a;
+    font-style: italic;
+    margin-top: 2px;
+    margin-bottom: 7px;
+  }
+  .job ul {
+    padding-left: 16px;
+  }
+  .job li {
+    font-size: 12.5px;
+    color: #333;
+    margin-bottom: 4px;
+    line-height: 1.6;
+  }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .page { box-shadow: none; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-name">
+      <h1>Chelsea Bisenius</h1>
+      <div class="tagline">AI Content Evaluator &nbsp;·&nbsp; Data Quality Specialist</div>
+    </div>
+    <div class="header-contact">
+      8404 Blackstone Court, Johnstone, Iowa 50131<br />
+      chelseabisenius@gmail.com
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+      <div class="sidebar-section">
+        <h3>Core Skills</h3>
+        <div class="skill-item">AI Output Evaluation (RLHF)</div>
+        <div class="skill-item">Prompt Writing &amp; LLM Testing</div>
+        <div class="skill-item">Data Annotation &amp; Labeling</div>
+        <div class="skill-item">Quality Assurance Auditing</div>
+        <div class="skill-item">Technical &amp; Analytical Writing</div>
+        <div class="skill-item">Remote Independent Work</div>
+        <div class="skill-item">CRM &amp; Records Management</div>
+        <div class="skill-item">Microsoft Office Suite</div>
+        <div class="skill-item">Google Workspace</div>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>Education</h3>
+        <div class="edu-entry">
+          <div class="edu-degree">B.A. — English &amp; Communication Studies</div>
+          <div class="edu-school">University of Iowa<br />Iowa City, Iowa</div>
+          <div class="edu-year">Class of 2013</div>
+        </div>
+        <div style="font-size:11.5px; color:#666; line-height:1.5; margin-top:4px; margin-bottom:12px;">
+          Technical Writing · Research Methods · Digital Media &amp; Society · Professional Communication
+        </div>
+        <div class="edu-entry">
+          <div class="edu-degree">A.A.S. — Business Administration</div>
+          <div class="edu-school">Des Moines Area Community College<br />Ankeny, Iowa</div>
+          <div class="edu-year">Class of 2011</div>
+        </div>
+        <div style="font-size:11.5px; color:#666; line-height:1.5; margin-top:4px;">
+          Business Writing · Office Technology · Organizational Behavior · Intro to Computing
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>Certifications</h3>
+        <div class="cert-item">Appen Search Relevance Quality Certification<br /><span class="cert-year">2021</span></div>
+        <div class="cert-item">Google Digital Garage — Digital Marketing Fundamentals<br /><span class="cert-year">2022</span></div>
+        <div class="cert-item">Coursera — Introduction to AI (IBM)<br /><span class="cert-year">In Progress · 2026</span></div>
+      </div>
+
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+
+      <div class="summary-box">
+        Detail-oriented content evaluation professional with 5+ years reviewing AI-generated outputs, annotating training datasets, and delivering structured human feedback to improve machine learning systems. Background spans administrative coordination, customer service, and remote quality assurance — consistently meeting accuracy benchmarks and adapting quickly to evolving project guidelines.
+      </div>
+
+      <div class="section">
+        <div class="section-title">Work Experience</div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Freelance AI Content Evaluator</span>
+            <span class="job-date">Jan 2024 – Present</span>
+          </div>
+          <div class="job-company">Self-Employed — Remote</div>
+          <ul>
+            <li>Evaluate AI-generated responses for factual accuracy, relevance, tone, and safety across general and domain-specific topics</li>
+            <li>Write targeted prompts to probe LLM capabilities and identify areas for model improvement</li>
+            <li>Submit structured feedback reports aligned with client-provided rubrics; consistently maintain 96%+ quality scores</li>
+            <li>Manage multiple concurrent evaluation projects independently with minimal ramp-up time</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Content Quality Analyst</span>
+            <span class="job-date">Mar 2021 – Dec 2023</span>
+          </div>
+          <div class="job-company">Appen Ltd. — Remote</div>
+          <ul>
+            <li>Rated search results, ads, and AI-generated content for relevance and quality on behalf of major technology clients</li>
+            <li>Annotated text, image, and audio datasets for supervised machine learning training pipelines</li>
+            <li>Flagged misinformation, harmful content, and bias in AI outputs; maintained strict NDA compliance</li>
+            <li>Regularly selected for higher-tier evaluation tasks based on consistently high inter-annotator agreement scores</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Administrative Coordinator</span>
+            <span class="job-date">Jun 2017 – Feb 2021</span>
+          </div>
+          <div class="job-company">MidAmerican Energy Company — Des Moines, Iowa</div>
+          <ul>
+            <li>Managed data entry, document processing, and records for a 40-person operations department</li>
+            <li>Produced weekly operational reports and trained three incoming staff on internal systems</li>
+            <li>Identified and resolved systemic data errors, reducing reporting discrepancies by ~30%</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Customer Service Representative</span>
+            <span class="job-date">Aug 2014 – May 2017</span>
+          </div>
+          <div class="job-company">Principal Financial Group — Des Moines, Iowa</div>
+          <ul>
+            <li>Handled client inquiries on retirement, insurance, and benefit enrollment products</li>
+            <li>Maintained precise CRM records and ranked in the top quartile for customer satisfaction for six consecutive quarters</li>
+            <li>Recognized as Employee of the Month (February 2016) for accuracy and responsiveness</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Office Assistant</span>
+            <span class="job-date">Jun 2013 – Jul 2014</span>
+          </div>
+          <div class="job-company">University of Iowa Health Care — Iowa City, Iowa</div>
+          <ul>
+            <li>Provided administrative support including scheduling, record management, and insurance pre-authorizations</li>
+            <li>Maintained HIPAA compliance and assisted with transition to electronic records management system</li>
+          </ul>
+        </div>
+
+      </div>
+    </div><!-- /main -->
+  </div><!-- /body -->
+</div><!-- /page -->
+</body>
+</html>

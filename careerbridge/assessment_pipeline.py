@@ -19,8 +19,8 @@ Human gate:
 
 Usage:
     from careerbridge.assessment_pipeline import AssessmentPipeline, AssessmentConfig
-    from careerbridge.schema import Profile
 
+    # profile can be a plain dict (from VPS) or any object with profile_id attribute
     cfg = AssessmentConfig(cdp_url="ws://...", url="https://...", profile=profile)
     result = AssessmentPipeline(cfg).run()
 """
@@ -38,7 +38,15 @@ CB_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 if CB_DIR not in sys.path:
     sys.path.insert(0, CB_DIR)
 
-from careerbridge._llm   import call_llm, profile_summary, ANSWERABLE_ROLES, TEXT_INPUT_ROLES, SUBMIT_NAMES
+from careerbridge._llm   import call_llm, profile_summary
+
+# DOM element classification — kept here (pipeline concern, not LLM concern)
+ANSWERABLE_ROLES = frozenset({
+    "radio", "checkbox", "button", "option", "menuitem",
+    "menuitemcheckbox", "menuitemradio", "switch", "tab",
+})
+TEXT_INPUT_ROLES = frozenset({"textbox", "searchbox", "spinbutton"})
+SUBMIT_NAMES     = frozenset({"next", "continue", "submit", "save", "finish", "proceed"})
 from careerbridge._gate  import tg_notify, claude_code_gate
 from careerbridge.cdp_executor import CDPExecutor, CDPError
 from careerbridge.reliability  import retry_with_backoff
@@ -48,6 +56,44 @@ from humanizer_mcp._scroll   import scroll as _hum_scroll
 from humanizer_mcp._profile  import BehaviorProfile
 
 log = logging.getLogger(__name__)
+
+# ── Chunked humanized typing ──────────────────────────────────────────────────
+# Split long texts at sentence boundaries so each chunk types quickly.
+# Prevents timeout in both the Python-direct path and the MCP path.
+_CHUNK_CHARS = 220   # max chars per chunk; keeps MCP round-trip well under timeout
+
+def _hum_type_chunked(
+    text: str,
+    profile: BehaviorProfile,
+    rng: random.Random,
+    pause_between_sentences: bool = True,
+) -> None:
+    """
+    Type long text by splitting at sentence boundaries into chunks of
+    ≤ _CHUNK_CHARS characters. Each chunk is typed with full humanizer
+    timing. A brief inter-sentence pause is added between chunks.
+    """
+    import re as _re
+    if not text:
+        return
+
+    # Split at sentence boundaries while preserving the delimiter
+    parts = _re.split(r'(?<=[.!?])\s+', text.strip())
+    chunk = ""
+    for part in parts:
+        candidate = (chunk + " " + part).strip() if chunk else part
+        if len(candidate) <= _CHUNK_CHARS:
+            chunk = candidate
+        else:
+            if chunk:
+                _hum_type(chunk, profile=profile, rng=rng)
+                if pause_between_sentences:
+                    # Inter-sentence pause: 0.3–0.9s (thinking / reading next sentence)
+                    time.sleep(max(0.3, min(0.9, rng.gauss(0.55, 0.15))))
+            chunk = part
+
+    if chunk:
+        _hum_type(chunk, profile=profile, rng=rng)
 
 
 def _persona_humanize(canonical: str, question_context: str, profile_id: str) -> str:
@@ -88,11 +134,24 @@ def _extract_profile_id(profile) -> str:
 class AssessmentConfig:
     cdp_url:         str               # ws:// URL of the IXBrowser page
     url:             str               # assessment URL to navigate to
-    profile:         Any               # careerbridge.schema.Profile
-    human_gate:      bool = True       # pause for approval on free-text answers
-    max_pages:       int  = 50         # max question pages before giving up
-    page_timeout_s:  float = 30.0      # seconds to wait for page to stabilise
-    profile_seed:    Optional[int] = None  # optional seed for deterministic timing
+    profile:         Any               # dict from VPS or any object with profile_id attr
+
+    # "supervised" — humanizer + Gaussian timing + human gate on free-text
+    # "throughput"  — direct CDP clicks, no pauses, no gates, max speed
+    mode:            str   = "supervised"
+
+    human_gate:      bool  = True      # auto-derived from mode in __post_init__
+    max_pages:       int   = 50
+    page_timeout_s:  float = 30.0
+    profile_seed:    Optional[int] = None
+
+    def __post_init__(self):
+        if self.mode == "throughput":
+            self.human_gate = False
+
+    @property
+    def is_throughput(self) -> bool:
+        return self.mode == "throughput"
 
 
 # ── Result ────────────────────────────────────────────────────────────────────
@@ -119,11 +178,28 @@ class AssessmentPipeline:
     """
 
     def __init__(self, config: AssessmentConfig) -> None:
-        self._cfg     = config
-        self._cdp     = CDPExecutor()
-        self._profile = BehaviorProfile.default()
-        self._rng     = random.Random(config.profile_seed)
-        self._result  = AssessmentResult(ok=False)
+        self._cfg          = config
+        self._cdp          = CDPExecutor()
+        self._profile      = BehaviorProfile.default()
+        self._rng          = random.Random(config.profile_seed)
+        self._result       = AssessmentResult(ok=False)
+        self._persona_prompt = self._load_persona()
+
+    def _load_persona(self) -> str:
+        """Load persona prompt once at startup. Auto-generates if missing."""
+        pid = _extract_profile_id(self._cfg.profile)
+        if not pid:
+            return ""
+        try:
+            from answer_mcp._persona import get_persona_prompt, generate_persona
+            prompt = get_persona_prompt(pid)
+            if not prompt:
+                log.info("Auto-generating persona for profile %r", pid)
+                prompt = generate_persona(pid, {})["persona_prompt"]
+            return prompt or ""
+        except Exception as e:
+            log.warning("Persona load failed for %r: %s", pid, e)
+            return ""
 
     def run(self) -> AssessmentResult:
         tg_notify(f"🔍 Assessment started\nURL: {self._cfg.url}")
@@ -186,12 +262,16 @@ class AssessmentPipeline:
             if answerable:
                 self._handle_mcq(answerable)
 
-            # Click Next/Submit — brief review pause then click, then wait for page load
+            # Click Next/Submit
             if submit_btn:
-                time.sleep(max(0.5, min(1.3, self._rng.gauss(0.8, 0.2))))
-                self._click_node(submit_btn)
+                if self._cfg.is_throughput:
+                    self._click_node(submit_btn)
+                    time.sleep(0.4)  # minimal wait for page transition
+                else:
+                    time.sleep(max(0.5, min(1.3, self._rng.gauss(0.8, 0.2))))
+                    self._click_node(submit_btn)
+                    time.sleep(max(0.8, min(2.0, self._rng.gauss(1.2, 0.3))))
                 self._result.pages_done += 1
-                time.sleep(max(0.8, min(2.0, self._rng.gauss(1.2, 0.3))))
             elif not answerable and not text_inputs:
                 return
 
@@ -297,7 +377,8 @@ class AssessmentPipeline:
         page_context = self._get_page_context()
         try:
             actions = call_llm(element_list, profile_summary(self._cfg.profile),
-                               page_context=page_context)
+                               page_context=page_context,
+                               persona_prompt=self._persona_prompt)
             self._result.llm_calls += 1
         except Exception as e:
             log.warning("LLM call failed: %s — skipping page", e)
@@ -310,18 +391,12 @@ class AssessmentPipeline:
                 continue
             node = node_map[nid]
             if act.get("action") == "click":
-                read_s = max(0.9, min(3.5, self._rng.gauss(1.8, 0.5)))
-                time.sleep(read_s)
-                # 5% answer noise — simulates natural human imprecision
-                if self._rng.random() < 0.05:
-                    idx = next((j for j, n in enumerate(nodes) if n["nodeId"] == nid), None)
-                    if idx is not None:
-                        alt = max(0, min(len(nodes) - 1, idx + self._rng.choice([-1, 1])))
-                        node = nodes[alt]
-                        nid  = node["nodeId"]
+                if not self._cfg.is_throughput:
+                    time.sleep(max(0.9, min(3.5, self._rng.gauss(1.8, 0.5))))
                 self._click_node(node)
                 self._result.actions_taken += 1
-                time.sleep(max(0.18, min(0.55, self._rng.gauss(0.30, 0.08))))
+                if not self._cfg.is_throughput:
+                    time.sleep(max(0.18, min(0.55, self._rng.gauss(0.30, 0.08))))
 
     # ── Text input handling ───────────────────────────────────────────────────
 
@@ -334,7 +409,8 @@ class AssessmentPipeline:
         page_context = self._get_page_context()
         try:
             actions = call_llm(element_list, profile_summary(self._cfg.profile),
-                               page_context=page_context)
+                               page_context=page_context,
+                               persona_prompt=self._persona_prompt)
             self._result.llm_calls += 1
         except Exception as e:
             log.warning("LLM call failed: %s — skipping text fields", e)
@@ -348,12 +424,17 @@ class AssessmentPipeline:
                 continue
             text = act.get("text", "")
             if text:
+                node = node_map[nid]
+                # Persona humanization applies in ALL modes — only execution differs
                 if pid:
-                    label = node_map[nid].get("name") or node_map[nid].get("description") or ""
+                    label = node.get("name") or node.get("description") or ""
                     text = _persona_humanize(text, label, pid)
-                self._click_node(node_map[nid])
-                time.sleep(self._rng.uniform(0.15, 0.35))
-                _hum_type(text, profile=self._profile, rng=self._rng)
+                self._click_node(node)
+                if self._cfg.is_throughput:
+                    self._cdp_type(node, text)
+                else:
+                    time.sleep(self._rng.uniform(0.15, 0.35))
+                    _hum_type_chunked(text, profile=self._profile, rng=self._rng)
                 self._result.actions_taken += 1
 
     def _handle_text_inputs_with_gate(self, nodes: list[dict]) -> None:
@@ -370,7 +451,8 @@ class AssessmentPipeline:
         pid = _extract_profile_id(self._cfg.profile)
         try:
             actions = call_llm(element_list, profile_summary(self._cfg.profile),
-                               page_context=page_context)
+                               page_context=page_context,
+                               persona_prompt=self._persona_prompt)
             self._result.llm_calls += 1
             for act in actions:
                 nid = str(act.get("node_id", ""))
@@ -406,19 +488,94 @@ class AssessmentPipeline:
                 answer = raw or None
 
             if answer:
+                # Use CDP-based focus+type so it works when browser isn't foreground.
+                # _click_node still runs for visual realism if browser is in focus.
                 self._click_node(node)
                 time.sleep(self._rng.uniform(0.15, 0.35))
-                _hum_type(answer, profile=self._profile, rng=self._rng)
+                if self._cfg.is_throughput:
+                    self._cdp_type(node, answer)
+                else:
+                    _hum_type_chunked(answer, profile=self._profile, rng=self._rng)
                 self._result.actions_taken += 1
                 log.info("Typed approved answer for field '%s'", label[:40])
 
     # ── Click via CDP coord resolution + OS HID ───────────────────────────────
 
+    # ── Throughput execution (direct CDP, no humanizer) ──────────────────────
+
+    def _cdp_click(self, node: dict) -> None:
+        """Direct CDP JS click — throughput mode only."""
+        name = node.get("name", "")
+        role = node.get("role", "")
+        try:
+            escaped = name.replace("\\", "\\\\").replace("'", "\\'")
+            self._cdp.click_js(
+                f"(function(){{"
+                f"  var els=document.querySelectorAll('[role=\"{role}\"]');"
+                f"  for(var i=0;i<els.length;i++){{"
+                f"    var t=(els[i].textContent||els[i].getAttribute('aria-label')||'').trim();"
+                f"    if(t==='{escaped}'){{els[i].click();return true;}}"
+                f"  }}"
+                f"  var fb=document.querySelector('[aria-label=\"{escaped}\"]')"
+                f"       ||document.querySelector('[title=\"{escaped}\"]');"
+                f"  if(fb){{fb.click();return true;}}"
+                f"  return false;"
+                f"}})();"
+            )
+        except Exception as e:
+            log.warning("CDP click failed for '%s': %s", name[:40], e)
+
+    def _cdp_type(self, node: dict, text: str) -> None:
+        """Focus element via JS + insert text via CDP, works when browser is in background."""
+        import json as _json
+        try:
+            name = node.get("name", "")
+            esc_dq = name.replace("\\", "\\\\").replace('"', '\\"')
+            # Focus via aria-label exact match then contains
+            focus_expr = (
+                f"(function(){{"
+                f"  var el = document.querySelector('[aria-label=\"{esc_dq}\"]')"
+                f"         || document.querySelector('[aria-label*=\"{esc_dq}\"]');"
+                f"  if (el) {{ el.focus(); return true; }}"
+                f"  return false;"
+                f"}})();"
+            )
+            self._cdp._send("Runtime.evaluate", {"expression": focus_expr})
+            # CDP insertText types into focused element
+            self._cdp._send("Input.insertText", {"text": text})
+            # JS backup: set value via native setter + fire React events
+            # Use json.dumps to safely escape the answer text for JS
+            text_js = _json.dumps(text)  # produces a properly-quoted JS string literal
+            set_expr = (
+                f"(function(){{"
+                f"  var el = document.querySelector('[aria-label=\"{esc_dq}\"]')"
+                f"         || document.querySelector('[aria-label*=\"{esc_dq}\"]');"
+                f"  if (!el) return false;"
+                f"  var val = {text_js};"
+                f"  var nv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')"
+                f"        || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');"
+                f"  if (nv && nv.set) nv.set.call(el, val); else el.value = val;"
+                f"  el.dispatchEvent(new Event('input', {{bubbles:true}}));"
+                f"  el.dispatchEvent(new Event('change', {{bubbles:true}}));"
+                f"  return el.value;"
+                f"}})();"
+            )
+            self._cdp._send("Runtime.evaluate", {"expression": set_expr})
+        except Exception as e:
+            log.warning("CDP type failed: %s", e)
+
+    # ── Click dispatch (routes to humanizer or CDP based on mode) ─────────────
+
     def _click_node(self, node: dict) -> None:
         """
         Resolve node screen coordinates via CDP, deliver click via OS HID.
         Falls back to CDP click if coordinate resolution fails.
+        In throughput mode: skip directly to CDP click.
         """
+        if self._cfg.is_throughput:
+            self._cdp_click(node)
+            return
+
         node_id = node.get("nodeId")
         name    = node.get("name", "")
 
@@ -467,10 +624,18 @@ class AssessmentPipeline:
             pass
 
         # Last resort: CDP dispatch click (isTrusted=false but better than nothing)
+        # Tries aria-label, title, placeholder, then text-content on native elements
         try:
+            esc_dq = name.replace('"', '\\"')
+            esc_sq = name.replace("'", "\\'")
             self._cdp.click_js(
-                f"document.querySelector('[aria-label=\"{name}\"]') "
-                f"|| document.querySelector('[title=\"{name}\"]')"
+                f"document.querySelector('[aria-label=\"{esc_dq}\"]') "
+                f"|| document.querySelector('[title=\"{esc_dq}\"]') "
+                f"|| document.querySelector('[placeholder=\"{esc_dq}\"]') "
+                f"|| Array.from(document.querySelectorAll('button,a,[role=\"button\"],[role=\"link\"]'))"
+                f".find(function(el){{return (el.textContent||'').trim()==='{esc_sq}'}})"
+                f"|| Array.from(document.querySelectorAll('input,textarea,select'))"
+                f".find(function(el){{return (el.placeholder||el.getAttribute('aria-label')||'')==='{esc_sq}'}})"
             )
         except Exception as e:
             log.warning("All click methods failed for '%s': %s", name[:40], e)

@@ -6,58 +6,40 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\check_pending_approvals.py"
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_menu_router.py"
           },
           {
             "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\persona_remind.py"
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_gate_monitor.py"
           }
         ]
       }
     ],
-    "PreToolUse": [
+    "PostToolUse": [
       {
-        "matcher": "mcp__humanizer__.*|mcp__uia__.*|mcp__capture__.*",
+        "matcher": "mcp__vps__get_pending_approvals|mcp__vps__list_jobs",
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\require_approval.py"
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_present_jobs.py"
           }
         ]
       },
       {
-        "matcher": "mcp__vps__upsert_job",
+        "matcher": "mcp__vps__get_system_status",
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\filter_upsert_job.py"
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_system_status.py"
           }
         ]
       },
       {
-        "matcher": "mcp__browser__navigate",
+        "matcher": "mcp__vps__list_profiles",
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\browser_selection.py"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__vps__approve_job|mcp__vps__get_profile",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\profile_selection.py"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__vps__approve_job",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\choose_node.py"
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_present_profiles.py"
           }
         ]
       },
@@ -66,54 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\proxy_setup.py"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__humanizer__humanized_click",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\pre_submit_gate.py"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__humanizer__humanized_type",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\pre_answer_gate.py"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__schools__send_school_reports|mcp__schools__list_confirmed_schools",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\schools_filter.py"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "mcp__vps__approve_job",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\notify_job_approved.py"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__vps__update_job_status",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\notify_job_status.py"
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_profile_saved.py"
           }
         ]
       },
@@ -122,56 +57,25 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\notify_scraper_result.py"
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_trigger_discovery.py"
           }
         ]
       },
       {
-        "matcher": "mcp__vps__list_jobs|mcp__vps__get_pending_approvals|mcp__vps__list_schools",
+        "matcher": "mcp__schools__list_confirmed_schools",
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\present_job_options.py"
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_present_schools.py"
           }
         ]
       },
       {
-        "matcher": "mcp__capture__screenshot",
+        "matcher": "mcp__schools__discover_schools|mcp__schools__send_school_reports",
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\stuck_screen_detector.py"
-          },
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\captcha_detector.py"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__gemini__analyse_image",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\captcha_detector.py"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__answer__humanize_prose",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\persona_drift_guard.py"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__humanizer__humanized_type",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\answer_logger.py"
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_schools_notify.py"
           }
         ]
       }
@@ -182,7 +86,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\notify_session_end.py"
+            "command": "C:\\Python314\\python.exe D:\\cb-core\\hooks\\hook_session_end.py"
           }
         ]
       }

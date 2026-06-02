@@ -1,4 +1,11 @@
-
+"""
+BROKEN + SUPERSEDED — file is damaged (imports missing from top).
+Active job enrichment logic lives in scripts/enrich_jobs.py.
+Do not import or run this file.
+"""
+# fmt: off  # noqa
+import os, logging, requests
+log = logging.getLogger(__name__)
 
 SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 SERPER_BASE    = os.getenv("SERPER_BASE_URL", "https://google.serper.dev")

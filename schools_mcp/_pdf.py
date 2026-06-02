@@ -1,4 +1,4 @@
-"""Generate a PDF report for a confirmed school."""
+"""Generate PDF reports for confirmed schools — individual and batch."""
 from __future__ import annotations
 
 import io
@@ -167,6 +167,87 @@ def generate(school: dict) -> bytes:
     ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     story.append(Paragraph(
         f"Discovered by Corvus_Careebridge · {ts}",
+        ParagraphStyle("footer", fontSize=7, textColor=colors.HexColor("#aaaaaa")),
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+def generate_batch(schools: list[dict]) -> bytes:
+    """Return a single PDF summarising all schools in one discovery run."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=1.5*cm, rightMargin=1.5*cm,
+        topMargin=2*cm, bottomMargin=2*cm,
+    )
+    _, sub_style, body_style, label_style, small_style = _styles()
+    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+    cover_title = ParagraphStyle(
+        "CoverTitle", fontSize=20, fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#2c3e50"), spaceAfter=6,
+    )
+    story = [
+        Paragraph("School Discovery Report", cover_title),
+        Paragraph(f"{len(schools)} school(s) found &bull; {ts}", sub_style),
+        Spacer(1, 10),
+        HRFlowable(width="100%", thickness=1, color=colors.HexColor("#2c3e50")),
+        Spacer(1, 10),
+    ]
+
+    # Summary table
+    header = [
+        Paragraph("School", label_style),
+        Paragraph("Location", label_style),
+        Paragraph("Score", label_style),
+        Paragraph("Criteria Met", label_style),
+        Paragraph("Official URL", label_style),
+    ]
+    rows = [header]
+    for s in schools:
+        name     = s.get("name", "Unknown")[:50]
+        city     = s.get("city", "")
+        state    = s.get("state", "")
+        loc      = ", ".join(p for p in [city, state] if p) or "—"
+        score    = s.get("criteria_score", 0)
+        met      = s.get("filters") or []
+        criteria = ", ".join(CRITERIA_LABELS.get(f, f) for f in met) or "none"
+        url      = s.get("url", "")[:60]
+
+        badge_color = _SCORE_COLORS.get(score, _SCORE_COLORS[0])
+        score_style = ParagraphStyle(
+            f"sc{score}", fontSize=8, fontName="Helvetica-Bold",
+            textColor=badge_color, alignment=1,
+        )
+        rows.append([
+            Paragraph(name, small_style),
+            Paragraph(loc, small_style),
+            Paragraph(f"{score}/6", score_style),
+            Paragraph(criteria, small_style),
+            Paragraph(url, small_style),
+        ])
+
+    tbl = Table(rows, colWidths=[4.5*cm, 2.5*cm, 1.2*cm, 5*cm, 4.3*cm])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND",     (0, 0), (-1, 0),  colors.HexColor("#2c3e50")),
+        ("TEXTCOLOR",      (0, 0), (-1, 0),  colors.white),
+        ("FONTNAME",       (0, 0), (-1, 0),  "Helvetica-Bold"),
+        ("FONTSIZE",       (0, 0), (-1, 0),  8),
+        ("GRID",           (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f5f5")]),
+        ("VALIGN",         (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING",     (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 4),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 10))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        f"Corvus_Careebridge · {ts}",
         ParagraphStyle("footer", fontSize=7, textColor=colors.HexColor("#aaaaaa")),
     ))
 

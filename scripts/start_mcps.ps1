@@ -1,6 +1,7 @@
 # start_mcps.ps1 — Start all CareerBridge MCP HTTP servers
 # Run at boot via Task Scheduler (see register_startup.ps1)
-# Each server auto-skips if already listening on its port.
+# Pass -Force to kill and restart any server already on its port.
+param([switch]$Force)
 
 $py  = "C:\Python314\python.exe"
 $cb  = Split-Path $PSScriptRoot -Parent
@@ -35,10 +36,20 @@ if (Test-Path $envFile) {
 }
 
 foreach ($s in $servers) {
-    $listening = (Get-NetTCPConnection -LocalPort $s.port -State Listen -ErrorAction SilentlyContinue) -ne $null
+    $conn = Get-NetTCPConnection -LocalPort $s.port -State Listen -ErrorAction SilentlyContinue
+    $listening = $conn -ne $null
     if ($listening) {
-        Write-Host "  SKIP  $($s.mod) (port $($s.port) already in use)"
-    } else {
+        if ($Force) {
+            $oldPid = $conn.OwningProcess
+            Write-Host "  KILL  $($s.mod) (PID $oldPid on port $($s.port))"
+            Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 800
+            $listening = $false
+        } else {
+            Write-Host "  SKIP  $($s.mod) (port $($s.port) already in use)"
+        }
+    }
+    if (-not $listening) {
         Start-Process -FilePath $py `
             -ArgumentList "-m", $s.mod, "--http", "$($s.port)" `
             -WorkingDirectory $cb `

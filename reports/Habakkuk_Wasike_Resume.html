@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Habakkuk Wasike — Resume</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #e8eaed;
+    color: #1c1c1c;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+
+  .page {
+    width: 780px;
+    background: #fff;
+    box-shadow: 0 6px 40px rgba(0,0,0,0.14);
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: #1b4d3e;
+    color: #fff;
+    padding: 0;
+    display: flex;
+  }
+  .header-accent {
+    width: 8px;
+    background: #4caf7d;
+    flex-shrink: 0;
+  }
+  .header-content {
+    flex: 1;
+    padding: 34px 40px 28px;
+  }
+  .header-content h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    line-height: 1.1;
+    color: #fff;
+  }
+  .header-content .tagline {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #7ecfa3;
+    margin-top: 7px;
+  }
+  .header-meta {
+    display: flex;
+    gap: 28px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .meta-item {
+    font-size: 12px;
+    color: #b8dcc8;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .meta-item strong { color: #fff; }
+
+  /* ── BODY ── */
+  .body {
+    display: flex;
+  }
+
+  /* ── MAIN ── */
+  .main {
+    flex: 1;
+    padding: 28px 32px 36px;
+    border-right: 1px solid #e8ede9;
+  }
+
+  .summary-box {
+    background: #f0f7f3;
+    border-left: 3px solid #1b4d3e;
+    padding: 13px 16px;
+    margin-bottom: 26px;
+    font-size: 12.5px;
+    color: #333;
+    line-height: 1.75;
+  }
+
+  .section { margin-bottom: 24px; }
+  .section:last-child { margin-bottom: 0; }
+
+  .section-title {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: #1b4d3e;
+    border-bottom: 1.5px solid #1b4d3e;
+    padding-bottom: 4px;
+    margin-bottom: 14px;
+  }
+
+  .job { margin-bottom: 18px; }
+  .job:last-child { margin-bottom: 0; }
+
+  .job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 2px;
+  }
+  .job-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1b4d3e;
+  }
+  .job-date {
+    font-size: 10px;
+    font-weight: 600;
+    color: #4caf7d;
+    white-space: nowrap;
+    flex-shrink: 0;
+    background: #f0f7f3;
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+  .job-company {
+    font-size: 11.5px;
+    color: #6a8575;
+    font-style: italic;
+    margin-bottom: 7px;
+  }
+  .job ul { padding-left: 14px; }
+  .job li {
+    font-size: 12px;
+    color: #444;
+    margin-bottom: 4px;
+    line-height: 1.65;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 210px;
+    flex-shrink: 0;
+    background: #f8fbf9;
+    padding: 28px 20px;
+  }
+
+  .sb-section { margin-bottom: 24px; }
+  .sb-section:last-child { margin-bottom: 0; }
+
+  .sb-title {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #1b4d3e;
+    border-bottom: 1.5px solid #1b4d3e;
+    padding-bottom: 4px;
+    margin-bottom: 12px;
+  }
+
+  .lang-block { margin-bottom: 10px; }
+  .lang-name { font-size: 12.5px; font-weight: 600; color: #1b4d3e; }
+  .lang-bar-wrap { background: #d8e9e0; border-radius: 4px; height: 5px; margin-top: 4px; }
+  .lang-bar { background: #1b4d3e; border-radius: 4px; height: 5px; }
+  .lang-label { font-size: 10px; color: #6a8575; margin-top: 2px; }
+
+  .skill-pill {
+    display: inline-block;
+    background: #e4f0ea;
+    color: #1b4d3e;
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 4px 9px;
+    border-radius: 12px;
+    margin: 3px 3px 0 0;
+    line-height: 1.3;
+  }
+
+  .edu-entry { margin-bottom: 14px; }
+  .edu-degree { font-size: 12px; font-weight: 600; color: #1b4d3e; line-height: 1.4; }
+  .edu-school { font-size: 11px; color: #6a8575; font-style: italic; margin-top: 2px; }
+  .edu-year { font-size: 10.5px; color: #4caf7d; font-weight: 600; margin-top: 3px; }
+
+  .cert-item { font-size: 11.5px; color: #444; padding: 5px 0; border-bottom: 1px solid #e4ede8; line-height: 1.5; }
+  .cert-item:last-child { border-bottom: none; }
+  .cert-year { font-size: 10px; color: #8aa897; display: block; }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .page { box-shadow: none; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-accent"></div>
+    <div class="header-content">
+      <h1>Habakkuk Wasike</h1>
+      <div class="tagline">AI Data Specialist &nbsp;·&nbsp; Annotation &amp; Multilingual Language Expert</div>
+      <div class="header-meta">
+        <div class="meta-item"><strong>Nairobi, Kenya</strong></div>
+        <div class="meta-item">superquality3080@gmail.com</div>
+        <div class="meta-item">+254 701 871 812</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- MAIN -->
+    <div class="main">
+
+      <div class="summary-box">
+        Meticulous AI data specialist with 6+ years of hands-on experience in data annotation, multimodal labeling, and content quality review. Brings native fluency in both Oromo and Swahili with a strong technical grounding in AI training pipelines. Experienced across diverse annotation modalities — text, image, audio, and video — with a proven ability to maintain high accuracy under flexible remote work conditions.
+      </div>
+
+      <div class="section">
+        <div class="section-title">Professional Experience</div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">AI Training Data Specialist</span>
+            <span class="job-date">Feb 2023 – Present</span>
+          </div>
+          <div class="job-company">Scale AI Marketplace — Remote (Freelance)</div>
+          <ul>
+            <li>Annotate image, video, and audio datasets for computer vision and speech AI models, including bounding box labeling, object tracking, and audio segmentation</li>
+            <li>Perform pairwise response evaluations and instruction-adherence scoring for large language model fine-tuning projects</li>
+            <li>Carry out counting tasks and multimodal tagging assignments in Oromo and Swahili language contexts</li>
+            <li>Maintain annotation accuracy above 97% across all active projects; onboard to new task schemas within 24 hours</li>
+            <li>Contribute to multilingual RLHF datasets by reviewing and ranking AI-generated responses in East African language variants</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Data Quality Reviewer</span>
+            <span class="job-date">May 2020 – Jan 2023</span>
+          </div>
+          <div class="job-company">Sama (formerly Samasource) — Nairobi, Kenya</div>
+          <ul>
+            <li>Reviewed and validated annotation outputs from a team of 12 labelers across image segmentation, text classification, and audio transcription tasks</li>
+            <li>Flagged and corrected labeling errors, ensuring datasets met client quality thresholds before handoff to AI engineering teams</li>
+            <li>Annotated Swahili and Oromo speech datasets used in multilingual voice assistant development</li>
+            <li>Contributed to internal QA guidelines, reducing rework rates by 22% over an 18-month period</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Multilingual Content Moderator</span>
+            <span class="job-date">Aug 2017 – Apr 2020</span>
+          </div>
+          <div class="job-company">Teleperformance Kenya — Nairobi, Kenya</div>
+          <ul>
+            <li>Moderated user-generated content in Swahili, Oromo, and English across social and e-commerce platforms, applying client-defined content policies</li>
+            <li>Reviewed flagged posts for harmful content, misinformation, and policy violations with consistent decision accuracy above 94%</li>
+            <li>Mentored four new moderators on content guidelines and escalation workflows during onboarding cycles</li>
+          </ul>
+        </div>
+
+        <div class="job">
+          <div class="job-header">
+            <span class="job-title">Data Capture &amp; Records Officer</span>
+            <span class="job-date">Oct 2016 – Jul 2017</span>
+          </div>
+          <div class="job-company">Kenya National Bureau of Statistics — Nairobi, Kenya</div>
+          <ul>
+            <li>Captured, verified, and entered survey data collected in English, Swahili, and Oromo during the 2016 national household survey</li>
+            <li>Maintained structured data records and identified inconsistencies for field follow-up, improving data completeness by 15%</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+      <div class="sb-section">
+        <div class="sb-title">Languages</div>
+        <div class="lang-block">
+          <div class="lang-name">Oromo (Afaan Oromoo)</div>
+          <div class="lang-bar-wrap"><div class="lang-bar" style="width:100%"></div></div>
+          <div class="lang-label">Native Speaker</div>
+        </div>
+        <div class="lang-block">
+          <div class="lang-name">Swahili (Kiswahili)</div>
+          <div class="lang-bar-wrap"><div class="lang-bar" style="width:100%"></div></div>
+          <div class="lang-label">Native Speaker</div>
+        </div>
+        <div class="lang-block">
+          <div class="lang-name">English</div>
+          <div class="lang-bar-wrap"><div class="lang-bar" style="width:82%"></div></div>
+          <div class="lang-label">Advanced — B2/C1</div>
+        </div>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-title">Annotation Skills</div>
+        <span class="skill-pill">Image Labeling</span>
+        <span class="skill-pill">Bounding Box</span>
+        <span class="skill-pill">Object Tracking</span>
+        <span class="skill-pill">Audio Segmentation</span>
+        <span class="skill-pill">Video Tagging</span>
+        <span class="skill-pill">Pairwise Comparison</span>
+        <span class="skill-pill">Text Classification</span>
+        <span class="skill-pill">NLP Annotation</span>
+        <span class="skill-pill">RLHF Tasks</span>
+        <span class="skill-pill">Data Quality Review</span>
+        <span class="skill-pill">Content Moderation</span>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-title">Tools &amp; Platforms</div>
+        <span class="skill-pill">Scale AI Platform</span>
+        <span class="skill-pill">Appen Connect</span>
+        <span class="skill-pill">Labelbox</span>
+        <span class="skill-pill">Google Workspace</span>
+        <span class="skill-pill">Microsoft Excel</span>
+        <span class="skill-pill">Zoom / Teams</span>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-title">Education</div>
+        <div class="edu-entry">
+          <div class="edu-degree">B.Sc. — Information Science</div>
+          <div class="edu-school">Moi University<br />Eldoret, Kenya</div>
+          <div class="edu-year">Graduated 2016</div>
+        </div>
+        <div style="font-size:11px; color:#6a8575; line-height:1.5; margin-top:4px;">
+          Database Systems · Research Methods · Knowledge Management · Digital Curation
+        </div>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-title">Certifications</div>
+        <div class="cert-item">Scale AI Contributor Certification<span class="cert-year">2023</span></div>
+        <div class="cert-item">Sama Data Quality Badge<span class="cert-year">2021</span></div>
+        <div class="cert-item">Google IT Support Certificate (Coursera)<span class="cert-year">2020</span></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

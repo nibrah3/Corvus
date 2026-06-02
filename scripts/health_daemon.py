@@ -53,6 +53,7 @@ TUNNEL_PORTS = {
     6380: "Redis (6380->VPS:6379)",
     5433: "Postgres (5433->VPS:5432)",
     3101: "Crawlee (3101->VPS:3100)",
+    7788: "Firecrawl (7788->VPS:7788)",
 }
 TUNNEL_POLL_INTERVAL   = 60   # check tunnel every 60 s (less noisy than MCP 30 s)
 VPS_CHECK_INTERVAL     = 300  # check VPS containers every 5 minutes
@@ -80,6 +81,7 @@ SERVERS = [
     ("dom_mcp.server",       8710),
     ("cdp_mcp.server",       8712),
     ("vps_mcp.server",       8713),
+    ("schools_mcp.server",   8714),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -231,6 +233,7 @@ def _restart_tunnel() -> bool:
         "-L", "6380:127.0.0.1:6379",
         "-L", "5433:127.0.0.1:5432",
         "-L", "3101:127.0.0.1:3100",
+        "-L", "7788:127.0.0.1:7788",
         "-N", VPS_HOST,
     ]
     if key:

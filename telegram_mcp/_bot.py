@@ -61,6 +61,18 @@ def send_photo(chat_id: int | str, photo_path: str, caption: str = "") -> dict:
     return r.json()
 
 
+def send_document(chat_id: int | str, doc_bytes: bytes, filename: str, caption: str = "") -> dict:
+    token = _token()
+    url = f"https://api.telegram.org/bot{token}/sendDocument"
+    r = requests.post(
+        url,
+        data={"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"},
+        files={"document": (filename, doc_bytes, "application/pdf")},
+        timeout=60,
+    )
+    return r.json()
+
+
 def edit_message(chat_id: int | str, message_id: int, text: str,
                  parse_mode: str = "HTML", reply_markup: dict | None = None) -> dict:
     payload: dict = {"chat_id": chat_id, "message_id": message_id,

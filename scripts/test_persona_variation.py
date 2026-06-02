@@ -2,7 +2,8 @@
 test_persona_variation.py — Comprehensive live persona variation test.
 
 Covers all pipeline hooks:
-  1. gemini_agent.py     (_apply_persona on type actions)
+  1. gemini_agent.py     (_apply_persona) — ARCHIVED: careerbridge/_archive/reasoning/gemini_agent.py
+                         Step 1 will fail if gemini_agent is not on the path.
   2. assessment_pipeline (_persona_humanize in CDP text answer paths)
   3. application_pipeline (persona in pre-answers + task prompt)
   4. cv_generator        (persona in CV summary + cover letter)
@@ -135,8 +136,7 @@ def test_gemini_hook() -> None:
 def test_assessment_hook() -> None:
     print("\n=== STEP 3: assessment_pipeline hook (_persona_humanize) ===")
     from careerbridge.assessment_pipeline import _persona_humanize, _extract_profile_id
-    from careerbridge.schema import Profile, BigFive, ResponseBias, LinguisticTraits, BehaviorFingerprint
-    from careerbridge.types import MouseSpeed
+    from types import SimpleNamespace
     import datetime
 
     # Test _persona_humanize directly
@@ -158,21 +158,8 @@ def test_assessment_hook() -> None:
     _check("assessment/substance_B", _substance_ok(out_b, CANONICAL_1))
     _check("assessment/substance_C", _substance_ok(out_c, CANONICAL_1))
 
-    # _extract_profile_id with Profile dataclass
-    p = Profile(
-        profile_id=PROFILE_A,
-        name="Test User",
-        big_five=BigFive(60, 70, 50, 80, 30),
-        response_bias=ResponseBias(0.3, 0.2, 0.6, 0.8),
-        linguistic_traits=LinguisticTraits(0.5, 0.6, 0.7),
-        behavior=BehaviorFingerprint(
-            typing_wpm=65, error_rate=0.03,
-            mouse_speed=MouseSpeed.MEDIUM,
-            pause_min_ms=80, pause_max_ms=400,
-        ),
-        created_at=datetime.datetime.utcnow().isoformat(),
-        runs=0,
-    )
+    # _extract_profile_id with object (simulates dataclass — no schema dependency)
+    p = SimpleNamespace(profile_id=PROFILE_A)
     pid = _extract_profile_id(p)
     _check("assessment/extract_profile_id_dataclass", pid == PROFILE_A, f"got={pid!r}")
 

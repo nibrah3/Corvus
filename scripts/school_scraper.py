@@ -1,6 +1,9 @@
 """
-School Enrollment Scraper — CareerBridge
-=========================================
+SUPERSEDED — use schools_mcp/ (College Scorecard + Firecrawl + Claude analysis).
+This file is kept for reference only and is not called by any active pipeline.
+
+School Enrollment Scraper — CareerBridge (legacy)
+==================================================
 Finds fully-online institutions meeting one or more of:
   • community_college     — community college
   • no_id_verification   — enrolls without ID verification

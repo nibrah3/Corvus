@@ -55,12 +55,14 @@ def _find_ixbrowser_exe() -> Optional[str]:
         return explicit
 
     candidates = [
-        r"C:\Users\Mike\AppData\Roaming\ixBrowser-Resources\synchronizer\ixBrowser.exe",
-        r"C:\Program Files\IXBrowser\IXBrowser.exe",
-        r"C:\Program Files (x86)\IXBrowser\IXBrowser.exe",
-        os.path.expanduser(r"~\AppData\Local\IXBrowser\IXBrowser.exe"),
+        # Main Electron app first — synchronizer path is the updater, not the UI
+        r"C:\Program Files\IXBrowser\ixBrowser.exe",
+        r"C:\Program Files (x86)\IXBrowser\ixBrowser.exe",
+        os.path.expanduser(r"~\AppData\Local\IXBrowser\ixBrowser.exe"),
+        os.path.expanduser(r"~\AppData\Local\Programs\IXBrowser\ixBrowser.exe"),
+        # Synchronizer last resort
         os.path.expanduser(r"~\AppData\Roaming\ixBrowser-Resources\synchronizer\ixBrowser.exe"),
-        os.path.expanduser(r"~\AppData\Local\Programs\IXBrowser\IXBrowser.exe"),
+        r"C:\Users\Mike\AppData\Roaming\ixBrowser-Resources\synchronizer\ixBrowser.exe",
     ]
     for p in candidates:
         if os.path.isfile(p):

@@ -46,7 +46,7 @@ _jobs_lock = threading.Lock()
 
 # ── Discovery pipeline ────────────────────────────────────────────────────────
 
-def _run_pipeline(job_id: str, limit: int, state: str) -> None:
+def _run_pipeline(job_id: str, limit: int, state: str, filters: list) -> None:
     def _update(**kw):
         with _jobs_lock:
             _jobs[job_id].update(kw)
@@ -64,7 +64,7 @@ def _run_pipeline(job_id: str, limit: int, state: str) -> None:
         # ── Round 1: Government API ───────────────────────────────────────────
         log.info("[%s] Round 1: College Scorecard API (limit=%d)", job_id, limit)
         _update(phase="gov_api")
-        candidates = fetch_candidates(filters=[], limit=limit)
+        candidates = fetch_candidates(filters=filters or [], limit=limit)
         _update(candidates=len(candidates))
 
         if not candidates:
@@ -76,6 +76,7 @@ def _run_pipeline(job_id: str, limit: int, state: str) -> None:
 
         session_seen: set[str] = set()
         stored = skipped_db = skipped_session = errors = 0
+        stored_schools: list[dict] = []
 
         # ── Round 2: Crawl + Analyze (no filter gate — store everything) ─────
         _update(phase="crawling", total=len(candidates))
@@ -111,9 +112,17 @@ def _run_pipeline(job_id: str, limit: int, state: str) -> None:
                 errors += 1
                 continue
 
+            # Attach discovery source URL (College Scorecard API record for this school)
+            scorecard_id = school.get("scorecard_id")
+            analyzed["source_url"] = (
+                f"https://api.data.ed.gov/student/v1/schools/{scorecard_id}"
+                if scorecard_id else "college_scorecard_api"
+            )
+
             # Save to DB regardless of score — filtering happens via hook
             if save(analyzed):
                 stored += 1
+                stored_schools.append(analyzed)
                 _update(stored=stored)
                 log.info(
                     "[%s] Saved: %s — score %d/6 — %s",
@@ -143,6 +152,32 @@ def _run_pipeline(job_id: str, limit: int, state: str) -> None:
         )
         log.info("[%s] Done. stored=%d", job_id, stored)
 
+        # Broadcast batch PDF to all users if anything was stored this run
+        if stored_schools:
+            try:
+                import tempfile, os as _os
+                from schools_mcp._pdf import generate_batch
+                from schools_mcp._notify import broadcast_pdf
+                pdf_bytes = generate_batch(stored_schools[:100])
+                ts_str = time.strftime("%Y%m%d_%H%M")
+                fname = f"schools_discovery_{ts_str}.pdf"
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                    tmp.write(pdf_bytes)
+                    tmp_path = tmp.name
+                caption = (
+                    f"*School Discovery Report*\n"
+                    f"{stored} new school(s) found — {ts_str}\n"
+                    f"Use the Schools menu to browse and send individual reports."
+                )
+                sent = broadcast_pdf(pdf_bytes, fname, caption)
+                log.info("[%s] Batch PDF broadcast to %d chat(s)", job_id, sent)
+                try:
+                    _os.unlink(tmp_path)
+                except Exception:
+                    pass
+            except Exception as e:
+                log.warning("[%s] Batch PDF failed: %s", job_id, e)
+
     except Exception as e:
         log.exception("[%s] Pipeline error: %s", job_id, e)
         _update(status="error", error=str(e))
@@ -152,18 +187,22 @@ def _run_pipeline(job_id: str, limit: int, state: str) -> None:
 # ── MCP Tools ─────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def discover_schools(limit: int = 500, state: str = "") -> dict:
+def discover_schools(limit: int = 500, state: str = "", filters: list = None) -> dict:
     """
     Discover US schools via the College Scorecard API then crawl each with
     Firecrawl + Claude Sonnet analysis. ALL discovered schools are stored
-    to the database regardless of criteria score. No filter is applied here
-    — use send_school_reports to browse and send filtered results to Telegram.
+    to the database regardless of criteria score.
 
     Args:
-        limit: Max candidates to pull from the gov API (default 500, max 500).
-        state: Optional two-letter US state code to restrict search (e.g. 'CA').
+        limit:   Max candidates to pull from the gov API (default 500, max 500).
+        state:   Optional two-letter US state code to restrict search (e.g. 'CA').
+        filters: Criteria to pre-filter candidates from the gov API. Any of:
+                 community_college, no_id_verification, no_transcript_required,
+                 monthly_enrollment, instant_acceptance, monthly_refund.
+                 Empty list = fetch all school types (broadest search).
     """
     limit = max(1, min(limit, 500))
+    filters = filters or []
 
     job_id = uuid.uuid4().hex[:8]
     with _jobs_lock:
@@ -175,11 +214,12 @@ def discover_schools(limit: int = 500, state: str = "") -> dict:
             "stored":     0,
             "limit":     limit,
             "state":     state,
+            "filters":   filters,
         }
 
     threading.Thread(
         target=_run_pipeline,
-        args=(job_id, limit, state),
+        args=(job_id, limit, state, filters),
         daemon=True,
     ).start()
 

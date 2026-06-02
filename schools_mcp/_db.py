@@ -51,10 +51,12 @@ def ensure_table() -> None:
         filters                TEXT[],
         criteria_score         INT DEFAULT 0,
         source                 TEXT DEFAULT 'schools_mcp',
+        source_url             TEXT,
         url_hash               TEXT UNIQUE,
         created_at             TIMESTAMPTZ DEFAULT NOW(),
         updated_at             TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE schools ADD COLUMN IF NOT EXISTS source_url TEXT;
     CREATE INDEX IF NOT EXISTS schools_filters_idx ON schools USING GIN(filters);
     CREATE INDEX IF NOT EXISTS schools_score_idx   ON schools (criteria_score DESC);
     """
@@ -102,6 +104,7 @@ def save(school: dict) -> bool:
         "community_college":      bool(school.get("community_college")),
         "filters":                school.get("filters", []),
         "criteria_score":         school.get("criteria_score", 0),
+        "source_url":             school.get("source_url") or None,
         "url_hash":               url_hash(school["url"]),
     }
     if not _HAS_DB:
@@ -113,24 +116,25 @@ def save(school: dict) -> bool:
         name, url, enrollment_url, type, evidence,
         no_id_verification, no_transcript_required, monthly_enrollment,
         instant_acceptance, monthly_refund, community_college,
-        filters, criteria_score, url_hash, updated_at
+        filters, criteria_score, source_url, url_hash, updated_at
     ) VALUES (
         %(name)s, %(url)s, %(enrollment_url)s, %(type)s, %(evidence)s,
         %(no_id_verification)s, %(no_transcript_required)s, %(monthly_enrollment)s,
         %(instant_acceptance)s, %(monthly_refund)s, %(community_college)s,
-        %(filters)s, %(criteria_score)s, %(url_hash)s, NOW()
+        %(filters)s, %(criteria_score)s, %(source_url)s, %(url_hash)s, NOW()
     )
     ON CONFLICT (url_hash) DO UPDATE SET
-        evidence              = EXCLUDED.evidence,
-        no_id_verification    = EXCLUDED.no_id_verification,
-        no_transcript_required= EXCLUDED.no_transcript_required,
-        monthly_enrollment    = EXCLUDED.monthly_enrollment,
-        instant_acceptance    = EXCLUDED.instant_acceptance,
-        monthly_refund        = EXCLUDED.monthly_refund,
-        community_college     = EXCLUDED.community_college,
-        filters               = EXCLUDED.filters,
-        criteria_score        = EXCLUDED.criteria_score,
-        updated_at            = NOW()
+        evidence               = EXCLUDED.evidence,
+        no_id_verification     = EXCLUDED.no_id_verification,
+        no_transcript_required = EXCLUDED.no_transcript_required,
+        monthly_enrollment     = EXCLUDED.monthly_enrollment,
+        instant_acceptance     = EXCLUDED.instant_acceptance,
+        monthly_refund         = EXCLUDED.monthly_refund,
+        community_college      = EXCLUDED.community_college,
+        filters                = EXCLUDED.filters,
+        criteria_score         = EXCLUDED.criteria_score,
+        source_url             = COALESCE(EXCLUDED.source_url, schools.source_url),
+        updated_at             = NOW()
     RETURNING id;
     """
     try:

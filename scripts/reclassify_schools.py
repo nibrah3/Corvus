@@ -172,7 +172,7 @@ def main():
     print(f"Schools re-analysis{'  [DRY RUN]' if args.dry_run else ''}")
     print(f"  Processed  : {len(schools)}")
     print(f"  Deleted    : {deleted}  (junk URLs)")
-    print(f"  Improved   : {improved}  (score 0 → ≥1)")
+    print(f"  Improved   : {improved}  (score 0 -> >=1)")
     print(f"  Unchanged  : {unchanged}  (still 0)")
     print(f"  Errors     : {errors}")
     print("=" * 55)
